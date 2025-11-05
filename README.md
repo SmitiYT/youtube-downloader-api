@@ -1,0 +1,297 @@
+# YouTube Downloader API
+
+Простой и мощный REST API для скачивания видео с YouTube и получения прямых ссылок на видеофайлы.
+
+## Возможности
+
+- Получение прямой ссылки на видео без загрузки на сервер
+- Скачивание видео на сервер с выбором качества
+- Получение полной информации о видео
+- Поддержка различных форматов и качества
+- Health check endpoint для мониторинга
+
+## Docker Hub
+
+```bash
+docker pull yourusername/youtube-downloader-api:latest
+```
+
+## Быстрый старт
+
+### Запуск через Docker
+
+```bash
+docker run -d -p 5000:5000 --name yt-downloader yourusername/youtube-downloader-api:latest
+```
+
+### Запуск через Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  youtube-downloader:
+    image: yourusername/youtube-downloader-api:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./downloads:/app/downloads
+    restart: unless-stopped
+```
+
+## API Endpoints
+
+### 1. Health Check
+
+```bash
+GET /health
+```
+
+Ответ:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00.123456"
+}
+```
+
+### 2. Получить прямую ссылку на видео
+
+```bash
+POST /get_direct_url
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "quality": "best[height<=720]"
+}
+```
+
+Параметры:
+- `url` (обязательный) - URL видео YouTube
+- `quality` (опциональный) - качество видео (по умолчанию: `best[height<=720]`)
+  - `best[height<=720]` - лучшее до 720p
+  - `best[height<=480]` - лучшее до 480p
+  - `best[height<=1080]` - лучшее до 1080p
+  - `best` - максимальное качество
+
+Ответ:
+```json
+{
+  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "direct_url": "https://...",
+  "duration": 180,
+  "filesize": 15728640,
+  "ext": "mp4",
+  "resolution": "1280x720",
+  "fps": 30,
+  "thumbnail": "https://...",
+  "uploader": "Channel Name",
+  "upload_date": "20240115",
+  "processed_at": "2024-01-15T10:30:00.123456"
+}
+```
+
+### 3. Скачать видео на сервер
+
+```bash
+POST /download_video
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "quality": "best[height<=720]"
+}
+```
+
+Ответ:
+```json
+{
+  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "filename": "video.mp4",
+  "file_path": "/app/downloads/tmp123/video.mp4",
+  "file_size": 15728640,
+  "download_url": "/download_file/tmp123/video.mp4",
+  "duration": 180,
+  "processed_at": "2024-01-15T10:30:00.123456"
+}
+```
+
+### 4. Скачать файл с сервера
+
+```bash
+GET /download_file/<folder>/<filename>
+```
+
+Возвращает файл для скачивания.
+
+### 5. Получить информацию о видео
+
+```bash
+POST /get_video_info
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID"
+}
+```
+
+Ответ:
+```json
+{
+  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "description": "Описание...",
+  "duration": 180,
+  "view_count": 1000000,
+  "like_count": 50000,
+  "uploader": "Channel Name",
+  "upload_date": "20240115",
+  "thumbnail": "https://...",
+  "tags": ["tag1", "tag2"],
+  "available_formats": 25,
+  "processed_at": "2024-01-15T10:30:00.123456"
+}
+```
+
+## Примеры использования
+
+### cURL
+
+```bash
+# Получить прямую ссылку
+curl -X POST http://localhost:5000/get_direct_url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+
+# Скачать видео
+curl -X POST http://localhost:5000/download_video \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "quality": "best[height<=480]"}'
+
+# Получить информацию
+curl -X POST http://localhost:5000/get_video_info \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
+```
+
+### Python
+
+```python
+import requests
+
+# Получить прямую ссылку
+response = requests.post('http://localhost:5000/get_direct_url', json={
+    'url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    'quality': 'best[height<=720]'
+})
+
+data = response.json()
+print(f"Direct URL: {data['direct_url']}")
+
+# Скачать видео
+response = requests.post('http://localhost:5000/download_video', json={
+    'url': 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+})
+
+data = response.json()
+download_url = f"http://localhost:5000{data['download_url']}"
+print(f"Download URL: {download_url}")
+```
+
+### JavaScript (Node.js)
+
+```javascript
+const axios = require('axios');
+
+// Получить прямую ссылку
+async function getDirectUrl(videoUrl) {
+  const response = await axios.post('http://localhost:5000/get_direct_url', {
+    url: videoUrl,
+    quality: 'best[height<=720]'
+  });
+
+  return response.data.direct_url;
+}
+
+// Использование
+getDirectUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+  .then(url => console.log('Direct URL:', url))
+  .catch(err => console.error('Error:', err));
+```
+
+## Разработка
+
+### Локальная сборка
+
+```bash
+git clone https://github.com/yourusername/youtube-downloader-api.git
+cd youtube-downloader-api
+docker build -t youtube-downloader-api .
+docker run -p 5000:5000 youtube-downloader-api
+```
+
+### Локальный запуск без Docker
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+## Настройка GitHub Actions
+
+1. Создайте Docker Hub аккаунт
+2. Создайте Access Token в Docker Hub (Account Settings → Security → New Access Token)
+3. Добавьте секреты в GitHub repository:
+   - `DOCKER_USERNAME` - ваш Docker Hub username
+   - `DOCKER_TOKEN` - созданный Access Token
+4. Push в main branch автоматически соберет и опубликует образ
+
+## Технологии
+
+- Python 3.11
+- Flask 3.0.0
+- yt-dlp 2023.12.30
+- FFmpeg
+- Gunicorn
+- Docker
+
+## Безопасность
+
+- API не хранит персональные данные пользователей
+- Загруженные файлы хранятся во временных папках
+- Рекомендуется использовать за reverse proxy (nginx/traefik)
+- Добавьте rate limiting для production использования
+
+## Лицензия
+
+MIT License
+
+## Поддержка
+
+Если возникли проблемы:
+1. Проверьте логи контейнера: `docker logs <container_id>`
+2. Убедитесь что URL видео доступен
+3. Проверьте наличие свободного места для загрузок
+4. Создайте issue в GitHub repository
+
+## TODO
+
+- [ ] Добавить аутентификацию
+- [ ] Добавить rate limiting
+- [ ] Добавить очистку старых файлов
+- [ ] Добавить поддержку плейлистов
+- [ ] Добавить webhook уведомления
+- [ ] Добавить queue для больших загрузок
+
+## Автор
+
+Создано с использованием yt-dlp и Flask
+
+## Disclaimer
+
+Этот инструмент предназначен для личного использования. Убедитесь, что вы соблюдаете условия использования YouTube и авторские права при скачивании контента.
