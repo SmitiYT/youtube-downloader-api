@@ -111,11 +111,29 @@ Content-Type: application/json
   "thumbnail": "https://...",
   "uploader": "Channel Name",
   "upload_date": "20240115",
+  "http_headers": {...},
+  "expiry_warning": "URL expires in a few hours. Use immediately or call /download_video to save permanently.",
   "processed_at": "2024-01-15T10:30:00.123456"
 }
 ```
 
-### 3. Скачать видео на сервер
+**Важно:** Прямые ссылки имеют ограниченный срок действия и могут выдать 403 Forbidden при скачивании. Для гарантированного скачивания используйте `/download_direct` или `/download_video`.
+
+### 3. Скачать видео напрямую (рекомендуется)
+
+```bash
+POST /download_direct
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "quality": "best[height<=720]"
+}
+```
+
+Возвращает видео файл напрямую. Этот endpoint решает проблему 403 Forbidden, скачивая видео на сервер и отправляя его клиенту. Файл автоматически удаляется после отправки.
+
+### 5. Скачать видео на сервер
 
 ```bash
 POST /download_video
@@ -142,7 +160,7 @@ Content-Type: application/json
 }
 ```
 
-### 4. Скачать файл с сервера
+### 6. Скачать файл с сервера
 
 ```bash
 GET /download_file/<folder>/<filename>
@@ -150,7 +168,7 @@ GET /download_file/<folder>/<filename>
 
 Возвращает файл для скачивания.
 
-### 5. Получить информацию о видео
+### 7. Получить информацию о видео
 
 ```bash
 POST /get_video_info

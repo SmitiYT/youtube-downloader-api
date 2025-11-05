@@ -36,6 +36,9 @@ def get_direct_url():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
 
+            # Получаем HTTP headers необходимые для скачивания
+            http_headers = info.get('http_headers', {})
+
             return jsonify({
                 "success": True,
                 "video_id": info.get('id'),
@@ -50,6 +53,8 @@ def get_direct_url():
                 "thumbnail": info.get('thumbnail'),
                 "uploader": info.get('uploader'),
                 "upload_date": info.get('upload_date'),
+                "http_headers": http_headers,
+                "expiry_warning": "URL expires in a few hours. Use immediately or call /download_video to save permanently.",
                 "processed_at": datetime.now().isoformat()
             })
 
@@ -115,6 +120,59 @@ def download_file(folder, filename):
             return jsonify({"error": "File not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/download_direct', methods=['POST'])
+def download_direct():
+    """Скачать видео напрямую без сохранения на сервере (решает проблему 403)"""
+    try:
+        data = request.json
+        video_url = data.get('url')
+        quality = data.get('quality', 'best[height<=720]')
+
+        if not video_url:
+            return jsonify({"success": False, "error": "URL is required"}), 400
+
+        # Используем временную папку
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            ydl_opts = {
+                'format': quality,
+                'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=True)
+
+                # Находим скачанный файл
+                downloaded_files = os.listdir(temp_dir)
+                if downloaded_files:
+                    filename = downloaded_files[0]
+                    file_path = os.path.join(temp_dir, filename)
+
+                    # Отправляем файл
+                    response = send_file(
+                        file_path,
+                        as_attachment=True,
+                        download_name=filename
+                    )
+
+                    # Очистка будет выполнена после отправки
+                    return response
+                else:
+                    return jsonify({"success": False, "error": "No file downloaded"}), 500
+
+        finally:
+            # Очищаем временную папку
+            try:
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/get_video_info', methods=['POST'])
 def get_video_info():
