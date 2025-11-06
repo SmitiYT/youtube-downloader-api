@@ -138,10 +138,10 @@ Content-Type: application/json
   "video_id": "VIDEO_ID",
   "title": "Название видео",
   "filename": "video_20240115_103000.mp4",
-  "file_path": "/app/downloads/tmp123/video_20240115_103000.mp4",
+  "file_path": "/app/downloads/video_20240115_103000.mp4",
   "file_size": 15728640,
-  "download_url": "http://youtube_downloader:5000/download_file/tmp123/video_20240115_103000.mp4",
-  "download_path": "/download_file/tmp123/video_20240115_103000.mp4",
+  "download_url": "http://youtube_downloader:5000/download_file/video_20240115_103000.mp4",
+  "download_path": "/download_file/video_20240115_103000.mp4",
   "duration": 180,
   "resolution": "1280x720",
   "ext": "mp4",
@@ -151,8 +151,9 @@ Content-Type: application/json
 ```
 
 **Обратите внимание**:
-- `filename` теперь короткое безопасное имя в формате `video_YYYYMMDD_HHMMSS.ext`
+- `filename` короткое безопасное имя в формате `video_YYYYMMDD_HHMMSS.ext`
 - Оригинальное название сохраняется в поле `title`
+- Файлы сохраняются напрямую в `/app/downloads/` без дополнительных папок
 - Файлы имеют правильные права доступа (644) для чтения из n8n
 - `download_url` содержит полный URL для использования в n8n
 
@@ -178,7 +179,7 @@ Binary Property: data
 
 **Критически важно**: В Node 2 обязательно установите "Response Format" в значение "File", иначе n8n попытается загрузить видео в память как строку и выдаст ошибку "Cannot create a string longer than 0x1fffffe8 characters" для больших файлов.
 
-API автоматически вернёт полный URL с правильным хостом (например: `http://youtube_downloader:5000/download_file/tmp123/video.mp4`)
+API автоматически вернёт полный URL с правильным хостом (например: `http://youtube_downloader:5000/download_file/video_20240115_103000.mp4`)
 
 ### 5. Скачать видео на сервер
 
@@ -210,10 +211,10 @@ Content-Type: application/json
 ### 6. Скачать файл с сервера
 
 ```bash
-GET /download_file/<folder>/<filename>
+GET /download_file/<filename>
 ```
 
-Возвращает файл для скачивания.
+Возвращает файл для скачивания. Пример: `/download_file/video_20240115_103000.mp4`
 
 ### 7. Получить информацию о видео
 

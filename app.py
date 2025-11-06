@@ -17,15 +17,17 @@ def cleanup_old_files():
     """Удаляет файлы старше 1 часа"""
     import time
     current_time = time.time()
-    for root, dirs, files in os.walk(DOWNLOAD_DIR):
-        for d in dirs:
-            dir_path = os.path.join(root, d)
-            try:
-                # Проверяем время модификации директории
-                if current_time - os.path.getmtime(dir_path) > 3600:  # 1 час
-                    shutil.rmtree(dir_path)
-            except Exception:
-                pass
+    try:
+        for filename in os.listdir(DOWNLOAD_DIR):
+            file_path = os.path.join(DOWNLOAD_DIR, filename)
+            # Пропускаем если это не файл
+            if not os.path.isfile(file_path):
+                continue
+            # Проверяем время модификации файла
+            if current_time - os.path.getmtime(file_path) > 3600:  # 1 час
+                os.remove(file_path)
+    except Exception:
+        pass
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -87,15 +89,12 @@ def download_video():
         if not video_url:
             return jsonify({"success": False, "error": "URL is required"}), 400
 
-        # Создаем уникальную папку для загрузки
-        temp_dir = tempfile.mkdtemp(dir=DOWNLOAD_DIR)
-
-        # Используем короткое безопасное имя файла
+        # Используем короткое безопасное имя файла с timestamp
         safe_filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         ydl_opts = {
             'format': quality,
-            'outtmpl': os.path.join(temp_dir, f'{safe_filename}.%(ext)s'),
+            'outtmpl': os.path.join(DOWNLOAD_DIR, f'{safe_filename}.%(ext)s'),
             'quiet': True,
             'no_warnings': True,
         }
@@ -103,16 +102,14 @@ def download_video():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
 
-            # Находим скачанный файл
-            downloaded_files = os.listdir(temp_dir)
-            if downloaded_files:
-                filename = downloaded_files[0]
-                file_path = os.path.join(temp_dir, filename)
+            # Формируем имя скачанного файла
+            ext = info.get('ext', 'mp4')
+            filename = f"{safe_filename}.{ext}"
+            file_path = os.path.join(DOWNLOAD_DIR, filename)
 
-                # Устанавливаем права доступа
+            # Устанавливаем права доступа
+            if os.path.exists(file_path):
                 os.chmod(file_path, 0o644)
-                os.chmod(temp_dir, 0o755)
-
                 file_size = os.path.getsize(file_path)
 
                 return jsonify({
@@ -122,7 +119,7 @@ def download_video():
                     "filename": filename,
                     "file_path": file_path,
                     "file_size": file_size,
-                    "download_url": f"/download_file/{os.path.basename(temp_dir)}/{filename}",
+                    "download_url": f"/download_file/{filename}",
                     "duration": info.get('duration'),
                     "processed_at": datetime.now().isoformat()
                 })
@@ -132,11 +129,11 @@ def download_video():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route('/download_file/<folder>/<filename>', methods=['GET'])
-def download_file(folder, filename):
+@app.route('/download_file/<filename>', methods=['GET'])
+def download_file(filename):
     """Скачать файл с сервера"""
     try:
-        file_path = os.path.join(DOWNLOAD_DIR, folder, filename)
+        file_path = os.path.join(DOWNLOAD_DIR, filename)
         if os.path.exists(file_path):
             return send_file(file_path, as_attachment=True)
         else:
@@ -158,16 +155,13 @@ def download_direct():
         # Очищаем старые файлы перед загрузкой
         cleanup_old_files()
 
-        # Создаем уникальную папку для загрузки в DOWNLOAD_DIR
-        temp_dir = tempfile.mkdtemp(dir=DOWNLOAD_DIR)
-
-        # Используем короткое безопасное имя файла вместо оригинального title
+        # Используем короткое безопасное имя файла с timestamp
         # Оригинальное название сохраняется в metadata для информации
         safe_filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         ydl_opts = {
             'format': quality,
-            'outtmpl': os.path.join(temp_dir, f'{safe_filename}.%(ext)s'),
+            'outtmpl': os.path.join(DOWNLOAD_DIR, f'{safe_filename}.%(ext)s'),
             'quiet': True,
             'no_warnings': True,
         }
@@ -175,21 +169,18 @@ def download_direct():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
 
-            # Находим скачанный файл
-            downloaded_files = os.listdir(temp_dir)
-            if downloaded_files:
-                filename = downloaded_files[0]
-                file_path = os.path.join(temp_dir, filename)
+            # Формируем имя скачанного файла
+            ext = info.get('ext', 'mp4')
+            filename = f"{safe_filename}.{ext}"
+            file_path = os.path.join(DOWNLOAD_DIR, filename)
 
-                # Устанавливаем права доступа 644 (rw-r--r--)
+            # Устанавливаем права доступа 644 (rw-r--r--)
+            if os.path.exists(file_path):
                 os.chmod(file_path, 0o644)
-                # Устанавливаем права на директорию 755 (rwxr-xr-x)
-                os.chmod(temp_dir, 0o755)
-
                 file_size = os.path.getsize(file_path)
 
                 # Формируем пути для скачивания
-                download_path = f"/download_file/{os.path.basename(temp_dir)}/{filename}"
+                download_path = f"/download_file/{filename}"
                 # Получаем base URL из request (работает в Docker сети)
                 base_url = request.host_url.rstrip('/')
                 full_download_url = f"{base_url}{download_path}"
@@ -205,7 +196,7 @@ def download_direct():
                     "download_path": download_path,
                     "duration": info.get('duration'),
                     "resolution": info.get('resolution'),
-                    "ext": info.get('ext'),
+                    "ext": ext,
                     "note": "Use download_url (full URL) or download_path (relative) to get the file. File will auto-delete after 1 hour.",
                     "processed_at": datetime.now().isoformat()
                 })
