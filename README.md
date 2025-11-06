@@ -153,16 +153,23 @@ Content-Type: application/json
 
 **Использование в n8n:**
 
-Node 1 - HTTP Request:
+Node 1 - HTTP Request (Получить URL):
 ```
-POST http://youtube_downloader:5000/download_direct
+Method: POST
+URL: http://youtube_downloader:5000/download_direct
 Body: {"url": "https://youtube.com/watch?v=..."}
+Response Format: JSON
 ```
 
-Node 2 - HTTP Request:
+Node 2 - HTTP Request (Скачать файл):
 ```
-GET {{ $json.download_url }}
+Method: GET
+URL: {{ $json.download_url }}
+Response Format: File  ⚠️ ВАЖНО: Выберите "File", НЕ "String"!
+Binary Property: data
 ```
+
+**Критически важно**: В Node 2 обязательно установите "Response Format" в значение "File", иначе n8n попытается загрузить видео в память как строку и выдаст ошибку "Cannot create a string longer than 0x1fffffe8 characters" для больших файлов.
 
 API автоматически вернёт полный URL с правильным хостом (например: `http://youtube_downloader:5000/download_file/tmp123/video.mp4`)
 
@@ -335,6 +342,34 @@ python app.py
 - FFmpeg
 - Gunicorn
 - Docker
+
+## Troubleshooting для n8n
+
+### Ошибка: "Cannot create a string longer than 0x1fffffe8 characters"
+
+**Причина**: HTTP Request node в n8n пытается загрузить видеофайл в память как строку.
+
+**Решение**: В ноде скачивания файла (Node 2) измените настройки:
+1. Откройте настройки HTTP Request node
+2. Найдите параметр **"Response Format"**
+3. Измените с "String" на **"File"**
+4. Убедитесь что указано "Binary Property": **data**
+
+### Ошибка: "Invalid URL: /download_file/..."
+
+**Причина**: Используется относительный путь вместо полного URL.
+
+**Решение**: Используйте поле `download_url` из ответа, а не `download_path`:
+```
+Правильно: {{ $json.download_url }}
+Неправильно: {{ $json.download_path }}
+```
+
+### Ошибка: "HTTP Error 403: Forbidden"
+
+**Причина**: YouTube блокирует прямые ссылки после истечения срока действия.
+
+**Решение**: Используйте endpoint `/download_direct` вместо `/get_direct_url`. Первый скачивает видео на сервер, второй дает только прямую ссылку.
 
 ## Безопасность
 
