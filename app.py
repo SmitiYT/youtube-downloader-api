@@ -121,6 +121,65 @@ def validate_client_meta(client_meta):
         return False, f"client_meta exceeds {MAX_CLIENT_META_BYTES} bytes"
     return True, None
 
+def classify_youtube_error(error_message: str) -> dict:
+    """Классифицирует ошибку YouTube для автоматической обработки"""
+    error_lower = error_message.lower()
+    
+    if 'private video' in error_lower:
+        return {
+            "error_type": "private_video",
+            "error_message": "Video is private",
+            "user_action": "Mark as unavailable - private video"
+        }
+    elif 'video unavailable' in error_lower or 'this video is unavailable' in error_lower:
+        return {
+            "error_type": "unavailable",
+            "error_message": "Video is unavailable",
+            "user_action": "Mark as unavailable - deleted or removed"
+        }
+    elif 'video has been removed' in error_lower or 'deleted' in error_lower:
+        return {
+            "error_type": "deleted",
+            "error_message": "Video has been removed",
+            "user_action": "Mark as unavailable - deleted by uploader"
+        }
+    elif 'not available in your country' in error_lower or 'region' in error_lower:
+        return {
+            "error_type": "region_blocked",
+            "error_message": "Video is not available in your region",
+            "user_action": "Mark as region-restricted"
+        }
+    elif 'sign in to confirm' in error_lower and 'age' in error_lower:
+        return {
+            "error_type": "age_restricted",
+            "error_message": "Video is age-restricted",
+            "user_action": "Requires authentication - age verification"
+        }
+    elif 'copyright' in error_lower or 'copyright claim' in error_lower:
+        return {
+            "error_type": "copyright_claim",
+            "error_message": "Video removed due to copyright claim",
+            "user_action": "Mark as unavailable - copyright"
+        }
+    elif 'video not found' in error_lower or 'video id' in error_lower and 'invalid' in error_lower:
+        return {
+            "error_type": "not_found",
+            "error_message": "Video not found",
+            "user_action": "Mark as unavailable - invalid ID"
+        }
+    elif 'sign in' in error_lower or 'bot' in error_lower:
+        return {
+            "error_type": "authentication_required",
+            "error_message": "YouTube requires authentication (cookies needed)",
+            "user_action": "Check cookies file or retry later"
+        }
+    else:
+        return {
+            "error_type": "unknown",
+            "error_message": error_message[:500],
+            "user_action": "Review error manually"
+        }
+
 # ============================================
 # CLEANUP
 # ============================================
@@ -247,11 +306,13 @@ def download_video():
             ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
         elif os.path.exists(COOKIES_PATH):
             ydl_opts['cookiefile'] = COOKIES_PATH
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_url, download=True)
-            ext = info.get('ext', 'mp4')
-            filename = f"{safe_filename}.{ext}"
-            file_path = os.path.join(get_task_output_dir(task_id), filename)
+        
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=True)
+                ext = info.get('ext', 'mp4')
+                filename = f"{safe_filename}.{ext}"
+                file_path = os.path.join(get_task_output_dir(task_id), filename)
             if os.path.exists(file_path):
                 os.chmod(file_path, 0o644)
                 file_size = os.path.getsize(file_path)
@@ -296,6 +357,32 @@ def download_video():
                     "processed_at": metadata['completed_at']
                 })
             return jsonify({"success": False, "error": "No file downloaded"}), 500
+        except Exception as e:
+            error_info = classify_youtube_error(str(e))
+            metadata = {
+                "task_id": task_id,
+                "status": "error",
+                "mode": "sync",
+                "operation": "download_video",
+                "error_type": error_info["error_type"],
+                "error_message": error_info["error_message"],
+                "user_action": error_info["user_action"],
+                "raw_error": str(e)[:1000],
+                "failed_at": datetime.now().isoformat()
+            }
+            if client_meta is not None:
+                metadata['client_meta'] = client_meta
+            save_task_metadata(task_id, metadata)
+            return jsonify({
+                "success": False,
+                "task_id": task_id,
+                "status": "error",
+                "error_type": error_info["error_type"],
+                "error_message": error_info["error_message"],
+                "user_action": error_info["user_action"],
+                "metadata_url": f"/download/{task_id}/metadata.json",
+                "client_meta": client_meta
+            }), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -467,7 +554,11 @@ def task_status(task_id):
             "completed_at": task.get('completed_at')
         })
     elif task.get('status') == 'error':
-        resp['error'] = task.get('error')
+        resp['error_type'] = task.get('error_type', 'unknown')
+        resp['error_message'] = task.get('error_message', task.get('error', 'Unknown error'))
+        resp['user_action'] = task.get('user_action', 'Review error manually')
+        if task.get('raw_error'):
+            resp['raw_error'] = task.get('raw_error')
     return jsonify(resp)
 
 def _background_download(task_id: str, video_url: str, quality: str, client_meta: dict, operation: str = "download_video_async", base_url: str = "", cookies_from_browser: str = None):
@@ -523,9 +614,47 @@ def _background_download(task_id: str, video_url: str, quality: str, client_meta
                     metadata['client_meta'] = client_meta
                 save_task_metadata(task_id, metadata)
             else:
-                update_task(task_id, {"status": "error", "error": "File not downloaded"})
+                error_info = classify_youtube_error("File not downloaded")
+                update_task(task_id, {
+                    "status": "error",
+                    "error_type": error_info["error_type"],
+                    "error_message": error_info["error_message"],
+                    "user_action": error_info["user_action"]
+                })
+                metadata = {
+                    "task_id": task_id,
+                    "status": "error",
+                    "operation": operation,
+                    "error_type": error_info["error_type"],
+                    "error_message": error_info["error_message"],
+                    "user_action": error_info["user_action"],
+                    "failed_at": datetime.now().isoformat()
+                }
+                if client_meta is not None:
+                    metadata['client_meta'] = client_meta
+                save_task_metadata(task_id, metadata)
     except Exception as e:
-        update_task(task_id, {"status": "error", "error": str(e)})
+        error_info = classify_youtube_error(str(e))
+        update_task(task_id, {
+            "status": "error",
+            "error_type": error_info["error_type"],
+            "error_message": error_info["error_message"],
+            "user_action": error_info["user_action"],
+            "raw_error": str(e)[:1000]
+        })
+        metadata = {
+            "task_id": task_id,
+            "status": "error",
+            "operation": operation,
+            "error_type": error_info["error_type"],
+            "error_message": error_info["error_message"],
+            "user_action": error_info["user_action"],
+            "raw_error": str(e)[:1000],
+            "failed_at": datetime.now().isoformat()
+        }
+        if client_meta is not None:
+            metadata['client_meta'] = client_meta
+        save_task_metadata(task_id, metadata)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
