@@ -81,41 +81,54 @@ GET /health
 ```bash
 POST /download_video
 Content-Type: application/json
+```
 
+Пример валидного JSON (async):
+```json
 {
-  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
-  "async": true, // или false (по умолчанию false)
-  "client_meta": {"user_id": "123", ...} // любые ваши данные, опционально
+  "url": "https://www.youtube.com/watch?v=pj8lIC7kP6I",
+  "async": true,
+  "quality": "best[height<=720]",
+  "client_meta": {"videoId": "pj8lIC7kP6I"}
+}
+```
+
+Пример валидного JSON (sync):
+```json
+{
+  "url": "https://www.youtube.com/watch?v=pj8lIC7kP6I",
+  "quality": "best[height<=720]",
+  "client_meta": {"videoId": "pj8lIC7kP6I"}
 }
 ```
 
 Параметры:
 - `url` (обязательный) — ссылка на YouTube
 - `async` (опциональный, bool) — если true, задача выполняется асинхронно, иначе синхронно
-- `client_meta` (опциональный, object) — любые ваши метаданные, будут сохранены в metadata.json и возвращены в ответе
+- `quality` (опциональный, string) — формат yt-dlp, по умолчанию `best[height<=720]`
+- `client_meta` (опциональный, object) — любые ваши метаданные; сохраняются в `metadata.json` и возвращаются в ответе
 
-#### Пример ответа (sync):
+Пример ответа (sync):
 ```json
 {
   "success": true,
   "status": "completed",
-  "task_id": "...",
-  "download_url": "/download/<task_id>/output/<file>",
-  "metadata_url": "/download/<task_id>/metadata.json",
-  "client_meta": {"user_id": "123"},
-  ...
+  "task_id": "ab12cd34-...",
+  "download_path": "/download/ab12cd34.../output/video_20251114_212811.mp4",
+  "metadata_url": "/download/ab12cd34.../metadata.json",
+  "client_meta": {"videoId": "pj8lIC7kP6I"}
 }
 ```
 
-#### Пример ответа (async):
+Пример ответа (async):
 ```json
 {
   "success": true,
   "status": "processing",
-  "task_id": "...",
-  "metadata_url": "/download/<task_id>/metadata.json",
-  "client_meta": {"user_id": "123"},
-  ...
+  "task_id": "ab12cd34-...",
+  "check_status_url": "/task_status/ab12cd34-...",
+  "metadata_url": "/download/ab12cd34.../metadata.json",
+  "client_meta": {"videoId": "pj8lIC7kP6I"}
 }
 ```
 
