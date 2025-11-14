@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  youtube-downloader:
+    image: alexbic/youtube-downloader-api:latest
+    # или используйте GitHub Container Registry:
+    # image: ghcr.io/alexbic/youtube-downloader-api:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./downloads:/app/downloads
+      - ./tasks:/app/tasks
+      # Примонтируйте cookies.txt если нужно обойти защиту YouTube
+      # - ./cookies.txt:/app/cookies.txt
+    environment:
+      # Опционально: установите API-ключ для защиты эндпоинтов
+      # - YTDL_API_KEY=your-secret-key-here
+      - MAX_CLIENT_META_BYTES=16384
+      - MAX_CLIENT_META_DEPTH=5
+      - MAX_CLIENT_META_KEYS=200
+    restart: unless-stopped

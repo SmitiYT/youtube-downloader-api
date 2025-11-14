@@ -46,30 +46,23 @@ docker run -d -p 5000:5000 --name yt-downloader ghcr.io/alexbic/youtube-download
 
 ### Запуск с cookies для обхода защиты YouTube
 
-YouTube может блокировать загрузки без авторизации. Для обхода нужны cookies из браузера:
+YouTube может периодически блокировать загрузки, требуя авторизацию. Для обхода:
 
 1. Экспортируйте cookies из браузера в файл `cookies.txt` (Netscape format):
-   - Используйте расширение [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) для Chrome
-   - Или [cookies.txt](https://addons.mozilla.org/ru/firefox/addon/cookies-txt/) для Firefox
+   - Chrome: [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+   - Firefox: [cookies.txt](https://addons.mozilla.org/ru/firefox/addon/cookies-txt/)
+   - Зайдите на YouTube, затем экспортируйте cookies
 
-2. Запустите контейнер с примонтированным файлом cookies:
+2. Положите `cookies.txt` рядом с `docker-compose.yml` и раскомментируйте строку в volume:
 
-```bash
-docker run -d -p 5000:5000 \
-  -v /path/to/cookies.txt:/app/cookies.txt \
-  --name yt-downloader \
-  alexbic/youtube-downloader-api:latest
+```yaml
+volumes:
+  - ./cookies.txt:/app/cookies.txt  # <-- раскомментируйте эту строку
 ```
 
-3. В запросе укажите путь к cookies:
+3. Перезапустите контейнер: `docker-compose up -d`
 
-```json
-{
-  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
-  "cookiesFile": "/app/cookies.txt",
-  "async": true
-}
-```
+**Готово!** API автоматически использует cookies при каждом запросе, если файл существует. Никаких параметров в запросе не нужно.
 
 ### Запуск через Docker Compose
 
@@ -133,8 +126,7 @@ Content-Type: application/json
 - `url` (обязательный) — ссылка на YouTube
 - `async` (опциональный, bool) — если true, задача выполняется асинхронно, иначе синхронно
 - `quality` (опциональный, string) — формат yt-dlp, по умолчанию `best[height<=720]`
-- `cookiesFile` (опциональный, string) — путь к файлу cookies.txt внутри контейнера (для обхода защиты YouTube)
-- `cookiesFromBrowser` (опциональный, string) — браузер для извлечения cookies (`chrome`, `firefox`, `safari`, `edge` и др.; работает только локально, не в Docker)
+- `cookiesFromBrowser` (опциональный, string) — браузер для извлечения cookies (`chrome`, `firefox`, `safari`, `edge`; работает только локально, не в Docker)
 - `client_meta` (опциональный, object) — любые ваши метаданные; сохраняются в `metadata.json` и возвращаются в ответе
 
 Пример ответа (sync):
