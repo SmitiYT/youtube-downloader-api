@@ -1,3 +1,4 @@
+
 # Быстрый старт
 
 ## Использование готового образа
@@ -16,10 +17,46 @@ docker run -d -p 5000:5000 --name youtube-api alexbic/youtube-downloader-api:lat
 # Health check
 curl http://localhost:5000/health
 
-# Получить информацию о видео
-curl -X POST http://localhost:5000/get_video_info \
+# Скачать видео (синхронно)
+curl -X POST http://localhost:5000/download_video \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://www.youtube.com/watch?v=jNQXAC9IVRw"}'
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "client_meta": {"mode": "sync"}}'
+
+# Скачать видео (асинхронно)
+curl -X POST http://localhost:5000/download_video \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "async": true, "client_meta": {"mode": "async"}}'
+
+# Проверить статус задачи
+curl http://localhost:5000/task_status/<task_id>
+
+# Скачать metadata.json
+curl http://localhost:5000/download/<task_id>/metadata.json
+```
+
+### Структура task-директории
+
+После скачивания видео (sync/async) создаётся папка `/app/tasks/<task_id>/` с файлами:
+- `output/` — скачанные видеофайлы
+- `metadata.json` — метаданные задачи (включая client_meta)
+
+### Пример metadata.json
+```json
+{
+  "task_id": "...",
+  "status": "completed",
+  "mode": "sync|async",
+  "operation": "download_video",
+  "video_id": "...",
+  "title": "...",
+  "filename": "...",
+  "file_size": 123456,
+  "duration": 213,
+  "resolution": "1280x720",
+  "ext": "mp4",
+  "completed_at": "2025-11-14T21:29:02.562951",
+  "client_meta": {"mode": "sync"}
+}
 ```
 
 ## Результаты

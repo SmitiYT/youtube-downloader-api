@@ -76,7 +76,71 @@ GET /health
 }
 ```
 
-### 2. Получить прямую ссылку на видео
+### 2. Скачать видео (sync/async)
+
+```bash
+POST /download_video
+Content-Type: application/json
+
+{
+  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "async": true, // или false (по умолчанию false)
+  "client_meta": {"user_id": "123", ...} // любые ваши данные, опционально
+}
+```
+
+Параметры:
+- `url` (обязательный) — ссылка на YouTube
+- `async` (опциональный, bool) — если true, задача выполняется асинхронно, иначе синхронно
+- `client_meta` (опциональный, object) — любые ваши метаданные, будут сохранены в metadata.json и возвращены в ответе
+
+#### Пример ответа (sync):
+```json
+{
+  "success": true,
+  "status": "completed",
+  "task_id": "...",
+  "download_url": "/download/<task_id>/output/<file>",
+  "metadata_url": "/download/<task_id>/metadata.json",
+  "client_meta": {"user_id": "123"},
+  ...
+}
+```
+
+#### Пример ответа (async):
+```json
+{
+  "success": true,
+  "status": "processing",
+  "task_id": "...",
+  "metadata_url": "/download/<task_id>/metadata.json",
+  "client_meta": {"user_id": "123"},
+  ...
+}
+```
+
+### 3. Проверить статус задачи
+
+```bash
+GET /task_status/<task_id>
+```
+
+Ответ:
+```json
+{
+  "status": "completed|processing|error",
+  ...
+}
+```
+
+### 4. Скачать результат или метаданные
+
+```bash
+GET /download/<task_id>/output/<file>
+GET /download/<task_id>/metadata.json
+```
+
+### 5. Получить прямую ссылку на видео (старый endpoint)
 
 ```bash
 POST /get_direct_url
