@@ -16,7 +16,8 @@ services:
     volumes:
       - ./downloads:/app/downloads
       - ./tasks:/app/tasks
-      # Примонтируйте cookies.txt если нужно обойти защиту YouTube
+      # ВАЖНО: Раскомментируйте строку ниже и положите cookies.txt рядом с docker-compose.yml
+      # для обхода защиты YouTube (экспортируйте cookies из браузера через расширение)
       # - ./cookies.txt:/app/cookies.txt
     environment:
       # Public base URL for generating absolute download links (no trailing slash)

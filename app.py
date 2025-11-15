@@ -679,8 +679,6 @@ def _background_download(task_id: str, video_url: str, quality: str, client_meta
             ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
         elif os.path.exists(COOKIES_PATH):
             ydl_opts['cookiefile'] = COOKIES_PATH
-        if cookies_from_browser:
-            ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
             ext = info.get('ext', 'mp4')
