@@ -241,6 +241,7 @@ def _prepare_ydl_opts(task_id: str | None, video_url: str, quality: str, outtmpl
     if cookies_from_browser:
         ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
     elif os.path.exists(COOKIES_PATH):
+        touch_cookies()  # Обновляем временные метки перед использованием
         ydl_opts['cookiefile'] = COOKIES_PATH
 
     if LOG_YTDLP_OPTS:
@@ -253,6 +254,14 @@ def _prepare_ydl_opts(task_id: str | None, video_url: str, quality: str, outtmpl
 TASKS_DIR = "/app/tasks"
 COOKIES_PATH = "/app/cookies.txt"
 os.makedirs(TASKS_DIR, exist_ok=True)
+
+def touch_cookies():
+    """Обновляет временные метки cookies файла, чтобы он казался свежим для YouTube."""
+    if os.path.exists(COOKIES_PATH):
+        try:
+            os.utime(COOKIES_PATH, None)
+        except Exception:
+            pass
 
 def get_task_dir(task_id: str) -> str:
     return os.path.join(TASKS_DIR, task_id)
@@ -482,6 +491,7 @@ def get_direct_url():
         quality = data.get('quality', 'best[height<=720]')
         if not video_url:
             return jsonify({"error": "URL is required"}), 400
+        touch_cookies()  # Обновляем временные метки cookies
         ydl_opts = {'format': quality,'quiet': True,'no_warnings': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
@@ -715,6 +725,7 @@ def get_video_info():
         video_url = data.get('url')
         if not video_url:
             return jsonify({"error": "URL is required"}), 400
+        touch_cookies()  # Обновляем временные метки cookies
         ydl_opts = {'quiet': True,'no_warnings': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
