@@ -129,29 +129,43 @@ Content-Type: application/json
 - `cookiesFromBrowser` (опциональный, string) — браузер для извлечения cookies (`chrome`, `firefox`, `safari`, `edge`; работает только локально, не в Docker)
 - `client_meta` (опциональный, object) — любые ваши метаданные; сохраняются в `metadata.json` и возвращаются в ответе
 
-Пример ответа (sync):
+
+#### Пример ответа (sync):
 ```json
 {
-  "success": true,
-  "status": "completed",
   "task_id": "ab12cd34-...",
-  "download_path": "/download/ab12cd34.../output/video_20251114_212811.mp4",
+  "status": "completed",
+  "video_id": "pj8lIC7kP6I",
+  "title": "Название видео",
+  "filename": "video_20251114_212811.mp4",
+  "file_path": "/app/tasks/ab12cd34.../output/video_20251114_212811.mp4",
+  "file_size": 15728640,
+  "download_url": "http://localhost:5000/download_file/video_20251114_212811.mp4",
+  "download_path": "/download_file/video_20251114_212811.mp4",
+  "task_download_path": "/download/ab12cd34.../output/video_20251114_212811.mp4",
   "metadata_url": "/download/ab12cd34.../metadata.json",
-  "client_meta": {"videoId": "pj8lIC7kP6I"}
+  "duration": 180,
+  "resolution": "1280x720",
+  "ext": "mp4",
+  "client_meta": {"videoId": "pj8lIC7kP6I"},
+  "processed_at": "2025-11-14T21:28:11.123456"
 }
 ```
 
-Пример ответа (async):
+#### Пример ответа (async):
 ```json
 {
-  "success": true,
-  "status": "processing",
   "task_id": "ab12cd34-...",
+  "status": "processing",
   "check_status_url": "/task_status/ab12cd34-...",
   "metadata_url": "/download/ab12cd34.../metadata.json",
   "client_meta": {"videoId": "pj8lIC7kP6I"}
 }
 ```
+
+> **Важно:** В async-режиме ошибки (например, если видео приватное, удалено, заблокировано и т.д.) возвращаются только через `/task_status/<task_id>`. Сам ответ на POST всегда содержит только task_id и статус. Для получения результата или ошибки опрашивайте `/task_status/<task_id>`.
+
+В sync-режиме ошибка возвращается сразу с HTTP 400 и описанием ошибки.
 
 ### 3. Проверить статус задачи
 
@@ -197,7 +211,18 @@ Content-Type: application/json
 Ответ:
 ```json
 {
-  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "filename": "video_20240115_103000.mp4",
+  "file_path": "/app/downloads/video_20240115_103000.mp4",
+  "file_size": 15728640,
+  "download_url": "http://youtube_downloader:5000/download_file/video_20240115_103000.mp4",
+  "download_path": "/download_file/video_20240115_103000.mp4",
+  "duration": 180,
+  "resolution": "1280x720",
+  "ext": "mp4",
+  "note": "Use download_url (full URL) or download_path (relative) to get the file. File will auto-delete after 1 hour.",
+  "processed_at": "2024-01-15T10:30:00.123456"
   "video_id": "VIDEO_ID",
   "title": "Название видео",
   "direct_url": "https://...",
@@ -232,7 +257,14 @@ Content-Type: application/json
 Ответ:
 ```json
 {
-  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "filename": "video.mp4",
+  "file_path": "/app/downloads/tmp123/video.mp4",
+  "file_size": 15728640,
+  "download_url": "/download_file/tmp123/video.mp4",
+  "duration": 180,
+  "processed_at": "2024-01-15T10:30:00.123456"
   "video_id": "VIDEO_ID",
   "title": "Название видео",
   "filename": "video_20240115_103000.mp4",
@@ -309,7 +341,20 @@ Content-Type: application/json
 Ответ:
 ```json
 {
-  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "direct_url": "https://...",
+  "duration": 180,
+  "filesize": 15728640,
+  "ext": "mp4",
+  "resolution": "1280x720",
+  "fps": 30,
+  "thumbnail": "https://...",
+  "uploader": "Channel Name",
+  "upload_date": "20240115",
+  "http_headers": {},
+  "expiry_warning": "URL expires in a few hours. Use immediately or call /download_video to save permanently.",
+  "processed_at": "2024-01-15T10:30:00.123456"
   "video_id": "VIDEO_ID",
   "title": "Название видео",
   "filename": "video.mp4",
@@ -345,7 +390,18 @@ Content-Type: application/json
 Ответ:
 ```json
 {
-  "success": true,
+  "video_id": "VIDEO_ID",
+  "title": "Название видео",
+  "description": "Описание...",
+  "duration": 180,
+  "view_count": 1000000,
+  "like_count": 50000,
+  "uploader": "Channel Name",
+  "upload_date": "20240115",
+  "thumbnail": "https://...",
+  "tags": ["tag1", "tag2"],
+  "available_formats": 25,
+  "processed_at": "2024-01-15T10:30:00.123456"
   "video_id": "VIDEO_ID",
   "title": "Название видео",
   "description": "Описание...",
