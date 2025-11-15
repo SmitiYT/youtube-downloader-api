@@ -30,6 +30,10 @@ def log_startup_info():
     logger.info(f"Tasks dir: {TASKS_DIR}")
     logger.info(f"Cookies file: {COOKIES_PATH} {'(exists)' if os.path.exists(COOKIES_PATH) else '(not found)'}")
     logger.info(f"client_meta limits: bytes={MAX_CLIENT_META_BYTES}, depth={MAX_CLIENT_META_DEPTH}, keys={MAX_CLIENT_META_KEYS}, str_len={MAX_CLIENT_META_STRING_LENGTH}, list_len={MAX_CLIENT_META_LIST_LENGTH}")
+    # Сразу определяем API_KEY и API_KEY_ENABLED до любых функций
+    API_KEY = os.getenv('YTDL_API_KEY')
+    API_KEY_ENABLED = bool(API_KEY)
+
     logger.info(f"yt-dlp version: {get_yt_dlp_version()}")
     logger.info("=" * 60)
 
