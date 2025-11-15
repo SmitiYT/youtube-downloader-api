@@ -12,7 +12,7 @@ services:
     # или используйте GitHub Container Registry:
     # image: ghcr.io/alexbic/youtube-downloader-api:latest
     ports:
-      - "5000:5000"
+      - "5002:5000"
     volumes:
       - ./tasks:/app/tasks
       # ВАЖНО: Раскомментируйте строку ниже и положите cookies.txt рядом с docker-compose.yml

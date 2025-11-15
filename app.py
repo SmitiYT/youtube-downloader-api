@@ -292,39 +292,69 @@ redis_client = None
 REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
+REDIS_INIT_RETRIES = int(os.getenv('REDIS_INIT_RETRIES', 10))
+REDIS_INIT_DELAY_SECONDS = float(os.getenv('REDIS_INIT_DELAY_SECONDS', 1))
 
-try:
-    import redis  # type: ignore
-    redis_client = redis.Redis(
-        host=REDIS_HOST,
-        port=REDIS_PORT,
-        db=REDIS_DB,
-        decode_responses=True,
-        socket_connect_timeout=2,
-        socket_timeout=2
-    )
-    redis_client.ping()
-    STORAGE_MODE = "redis"
-except Exception:
-    redis_client = None
-    STORAGE_MODE = "memory"
+def _ensure_redis() -> bool:
+    """Пытается (пере)инициализировать Redis-клиент. Возвращает True при успехе."""
+    global redis_client, STORAGE_MODE
+    if redis_client is not None and STORAGE_MODE == "redis":
+        return True
+    try:
+        import redis  # type: ignore
+        client = redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            db=REDIS_DB,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2
+        )
+        client.ping()
+        redis_client = client
+        if STORAGE_MODE != "redis":
+            logger.info("Redis connected: switching storage to redis")
+        STORAGE_MODE = "redis"
+        return True
+    except Exception as e:
+        if STORAGE_MODE != "memory":
+            logger.warning(f"Redis unavailable, falling back to memory: {e}")
+        STORAGE_MODE = "memory"
+        redis_client = None
+        return False
+
+# Инициализация при старте с несколькими попытками, чтобы дождаться Redis
+for _i in range(max(0, REDIS_INIT_RETRIES)):
+    if _ensure_redis():
+        break
+    try:
+        time.sleep(max(0.0, REDIS_INIT_DELAY_SECONDS))
+    except Exception:
+        pass
 
 def save_task(task_id: str, data: dict):
+    # ленивое переподключение к Redis
+    _ensure_redis()
     if STORAGE_MODE == "redis" and redis_client is not None:
         try:
             redis_client.setex(f"task:{task_id}", 86400, json.dumps(data, ensure_ascii=False))
             return
         except Exception:
-            pass
+            # если write в Redis не удался — сохраняем в память как резерв
+            logger.warning("Redis write failed; saving task in memory store")
     tasks_store[task_id] = data
 
 def get_task(task_id: str):
+    # ленивое переподключение к Redis
+    _ensure_redis()
     if STORAGE_MODE == "redis" and redis_client is not None:
         try:
             data = redis_client.get(f"task:{task_id}")
-            return json.loads(data) if data else None
+            if data:
+                return json.loads(data)
         except Exception:
-            return tasks_store.get(task_id)
+            # fall back to memory below
+            logger.warning("Redis read failed; falling back to memory store")
     return tasks_store.get(task_id)
 
 def update_task(task_id: str, updates: dict):
@@ -753,6 +783,72 @@ def get_video_info():
 def task_status(task_id):
     task = get_task(task_id)
     if not task:
+        # Fallback 1: если есть metadata.json — читаем из него
+        meta_path = os.path.join(get_task_dir(task_id), "metadata.json")
+        try:
+            if os.path.exists(meta_path):
+                with open(meta_path, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                # async успешный кейс у нас — массив из одного объекта
+                if isinstance(meta, list) and meta:
+                    mi = meta[0]
+                    endpoint = mi.get('download_endpoint')
+                    resp = {
+                        "task_id": task_id,
+                        "status": mi.get('status', 'completed'),
+                        "video_id": mi.get('video_id'),
+                        "title": mi.get('title'),
+                        "filename": mi.get('filename'),
+                        "download_endpoint": endpoint,
+                        "storage_rel_path": mi.get('storage_rel_path'),
+                        "duration": mi.get('duration'),
+                        "resolution": mi.get('resolution'),
+                        "ext": mi.get('ext'),
+                        "created_at": mi.get('created_at'),
+                        "completed_at": mi.get('completed_at')
+                    }
+                    if endpoint:
+                        if PUBLIC_BASE_URL and API_KEY:
+                            resp["task_download_url"] = _join_url(PUBLIC_BASE_URL, endpoint)
+                            resp["metadata_url"] = _join_url(PUBLIC_BASE_URL, f"/download/{task_id}/metadata.json")
+                            resp["task_download_url_internal"] = build_internal_url(endpoint)
+                            resp["metadata_url_internal"] = build_internal_url(f"/download/{task_id}/metadata.json")
+                        else:
+                            resp["task_download_url_internal"] = build_internal_url(endpoint)
+                            resp["metadata_url_internal"] = build_internal_url(f"/download/{task_id}/metadata.json")
+                    if mi.get('client_meta') is not None:
+                        resp['client_meta'] = mi['client_meta']
+                    return jsonify(resp)
+                # error/other — объект
+                if isinstance(meta, dict):
+                    resp = {
+                        "task_id": task_id,
+                        "status": meta.get('status', 'error'),
+                        "error_type": meta.get('error_type', 'unknown'),
+                        "error_message": meta.get('error_message', meta.get('error', 'Unknown error')),
+                        "user_action": meta.get('user_action', 'Review error manually'),
+                        "failed_at": meta.get('failed_at')
+                    }
+                    if meta.get('raw_error'):
+                        resp['raw_error'] = meta['raw_error']
+                    if meta.get('client_meta') is not None:
+                        resp['client_meta'] = meta['client_meta']
+                    return jsonify(resp)
+        except Exception:
+            # игнорируем и продолжаем к следующему fallback
+            pass
+        # Fallback 2: Если папка задачи существует — считаем, что она в процессе
+        tdir = get_task_dir(task_id)
+        if os.path.isdir(tdir):
+            try:
+                created_at = datetime.fromtimestamp(os.path.getctime(tdir)).isoformat()
+            except Exception:
+                created_at = None
+            return jsonify({
+                "task_id": task_id,
+                "status": "processing",
+                "created_at": created_at
+            })
         return jsonify({"error": "Task not found"}), 404
     resp = {"task_id": task_id, "status": task.get('status'), "created_at": task.get('created_at')}
     if task.get('status') == 'completed':
