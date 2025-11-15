@@ -90,6 +90,18 @@ services:
       # Generate secure key: openssl rand -hex 32
       API_KEY: ${API_KEY}
 
+      # Logging controls
+      # Global app logging level: DEBUG|INFO|WARNING|ERROR|CRITICAL (default: INFO)
+      LOG_LEVEL: ${LOG_LEVEL}
+      # Progress logging for yt-dlp: off|compact|full (default: off)
+      PROGRESS_LOG: ${PROGRESS_LOG}
+      # Step in percent for compact progress (default: 10)
+      PROGRESS_STEP: ${PROGRESS_STEP}
+      # Extra diagnostics (optional): log resolved yt-dlp options
+      LOG_YTDLP_OPTS: ${LOG_YTDLP_OPTS}
+      # Forward yt-dlp warnings to app logs (optional)
+      LOG_YTDLP_WARNINGS: ${LOG_YTDLP_WARNINGS}
+
       # Redis configuration (enable multi-worker mode)
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -465,6 +477,35 @@ python app.py
 ### Режимы
 - Internal (auth=disabled): без `API_KEY` и без активного `PUBLIC_BASE_URL`. Ссылки будут строиться от `request.host_url`.
 - Public (auth=enabled): `PUBLIC_BASE_URL` + `API_KEY` заданы. Возвращаются внешние и внутренние абсолютные URL.
+
+### Логирование
+- `LOG_LEVEL`: уровень логов приложения. Значения: `DEBUG`, `INFO` (по умолчанию), `WARNING`, `ERROR`, `CRITICAL`.
+- `PROGRESS_LOG`: управление логами прогресса скачивания yt-dlp.
+  - `off` (по умолчанию): полностью подавляет прогресс-спам (включаются quiet/noprogress у yt-dlp).
+  - `compact`: компактные логи только по шагам (каждые `PROGRESS_STEP`%), например: `[abcd1234] progress: 20%`.
+  - `full`: подробные логи yt-dlp как есть (может быть очень многословно).
+- `PROGRESS_STEP`: шаг в процентах для `compact`-режима (по умолчанию 10).
+- `LOG_YTDLP_OPTS`: если `true`, логирует применённые опции yt-dlp (для отладки).
+- `LOG_YTDLP_WARNINGS`: если `true`, предупреждения yt-dlp будут попадать в логи приложения.
+
+Примеры запуска:
+
+```bash
+# Полное подавление прогресса (рекомендуется для production)
+docker run -d -p 5000:5000 \
+  -e PROGRESS_LOG=off -e LOG_LEVEL=INFO \
+  alexbic/youtube-downloader-api:latest
+
+# Компактные логи прогресса каждые 20%
+docker run -d -p 5000:5000 \
+  -e PROGRESS_LOG=compact -e PROGRESS_STEP=20 \
+  alexbic/youtube-downloader-api:latest
+
+# Полные логи прогресса (для отладки)
+docker run -d -p 5000:5000 \
+  -e PROGRESS_LOG=full -e LOG_LEVEL=DEBUG \
+  alexbic/youtube-downloader-api:latest
+```
 
 ## Troubleshooting для n8n
 
