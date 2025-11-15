@@ -9,31 +9,35 @@ import uuid
 import threading
 from functools import wraps
 
-# Логирование
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("yt-dlp-api")
+
+API_KEY = os.getenv('YTDL_API_KEY')
+API_KEY_ENABLED = bool(API_KEY)
+
 def log_startup_info():
+    public_url = os.getenv('PUBLIC_BASE_URL') or os.getenv('EXTERNAL_BASE_URL')
     logger.info("=" * 60)
     logger.info("YouTube Downloader API starting...")
     logger.info(f"Auth: {'ENABLED' if API_KEY_ENABLED else 'DISABLED'} (YTDL_API_KEY)")
-    public_url = os.getenv('PUBLIC_BASE_URL') or os.getenv('EXTERNAL_BASE_URL')
     if API_KEY_ENABLED and public_url:
-        logger.info(f"Mode: PUBLIC API with external URLs")
+        logger.info("Mode: PUBLIC API with external URLs")
         logger.info(f"Base URL: {public_url}")
     elif API_KEY_ENABLED:
-        logger.info(f"Mode: PUBLIC API with internal URLs")
+        logger.info("Mode: PUBLIC API with internal URLs")
     else:
-        logger.info(f"Mode: INTERNAL (Docker network)")
+        logger.info("Mode: INTERNAL (Docker network)")
         if public_url:
             logger.warning("WARNING: PUBLIC_BASE_URL is set but YTDL_API_KEY is not! PUBLIC_BASE_URL will be IGNORED: %s", public_url)
-    logger.info(f"Downloads dir: {DOWNLOAD_DIR}")
-    logger.info(f"Tasks dir: {TASKS_DIR}")
-    logger.info(f"Cookies file: {COOKIES_PATH} {'(exists)' if os.path.exists(COOKIES_PATH) else '(not found)'}")
-    logger.info(f"client_meta limits: bytes={MAX_CLIENT_META_BYTES}, depth={MAX_CLIENT_META_DEPTH}, keys={MAX_CLIENT_META_KEYS}, str_len={MAX_CLIENT_META_STRING_LENGTH}, list_len={MAX_CLIENT_META_LIST_LENGTH}")
-    # Сразу определяем API_KEY и API_KEY_ENABLED до любых функций
-    API_KEY = os.getenv('YTDL_API_KEY')
-    API_KEY_ENABLED = bool(API_KEY)
-
+    # Некоторые константы могут быть ещё не определены при импорте — проверяем наличие
+    if 'DOWNLOAD_DIR' in globals():
+        logger.info(f"Downloads dir: {DOWNLOAD_DIR}")
+    if 'TASKS_DIR' in globals():
+        logger.info(f"Tasks dir: {TASKS_DIR}")
+    if 'COOKIES_PATH' in globals():
+        logger.info(f"Cookies file: {COOKIES_PATH} {'(exists)' if os.path.exists(COOKIES_PATH) else '(not found)'}")
+    if 'MAX_CLIENT_META_BYTES' in globals():
+        logger.info(f"client_meta limits: bytes={MAX_CLIENT_META_BYTES}, depth={MAX_CLIENT_META_DEPTH}, keys={MAX_CLIENT_META_KEYS}, str_len={MAX_CLIENT_META_STRING_LENGTH}, list_len={MAX_CLIENT_META_LIST_LENGTH}")
     logger.info(f"yt-dlp version: {get_yt_dlp_version()}")
     logger.info("=" * 60)
 
@@ -43,15 +47,11 @@ def get_yt_dlp_version():
     except Exception:
         return 'unknown'
 
-log_startup_info()
-
 app = Flask(__name__)
 
 # ============================================
 # AUTH CONFIG
 # ============================================
-API_KEY = os.getenv('YTDL_API_KEY')
-API_KEY_ENABLED = bool(API_KEY)
 
 def require_api_key(f):
     @wraps(f)
@@ -217,6 +217,9 @@ def classify_youtube_error(error_message: str) -> dict:
             "error_message": error_message[:500],
             "user_action": "Review error manually"
         }
+
+# Вызов логирования после определения всех лимитов и функций (однократно при импорте)
+log_startup_info()
 
 # ============================================
 # CLEANUP
