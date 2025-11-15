@@ -52,23 +52,47 @@ docker run -d -p 5000:5000 --name yt-downloader ghcr.io/alexbic/youtube-download
 
 ### Запуск с cookies для обхода защиты YouTube
 
-YouTube может периодически блокировать загрузки, требуя авторизацию. Для обхода:
+YouTube может периодически блокировать загрузки, требуя авторизацию.
 
-1. Экспортируйте cookies из браузера в файл `cookies.txt` (Netscape format):
+**⚠️ Важно про cookies:**
+- YouTube ротирует cookies в открытых вкладках как меру безопасности
+- Cookies, экспортированные из обычной вкладки, быстро протухают
+- Нужно экспортировать через **приватное окно** по специальной методике
+
+**Правильный способ экспорта cookies (рекомендуется):**
+
+1. Откройте **новое приватное/инкогнито окно** и залогиньтесь на YouTube
+2. В **той же вкладке** перейдите на `https://www.youtube.com/robots.txt`
+3. Экспортируйте cookies для `youtube.com` через расширение браузера:
    - Chrome: [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
    - Firefox: [cookies.txt](https://addons.mozilla.org/ru/firefox/addon/cookies-txt/)
-   - Зайдите на YouTube, затем экспортируйте cookies
+4. **Сразу закройте** приватное окно, чтобы сессия больше не открывалась
 
-2. Положите `cookies.txt` рядом с `docker-compose.yml` и раскомментируйте строку в volume:
+**Примечание:** НЕ используйте `--cookies-from-browser` для экспорта из приватной сессии — он экспортирует cookies из обычного браузера, а не из инкогнито.
+
+5. Положите `cookies.txt` рядом с `docker-compose.yml` и раскомментируйте строку в volume:
 
 ```yaml
 volumes:
   - ./cookies.txt:/app/cookies.txt  # <-- раскомментируйте эту строку
 ```
 
-3. Перезапустите контейнер: `docker-compose up -d`
+6. Перезапустите контейнер: `docker-compose up -d`
 
-**Готово!** API автоматически использует cookies при каждом запросе, если файл существует. Никаких параметров в запросе не нужно.
+**Готово!** API автоматически использует cookies и обновляет их временные метки перед каждым запросом.
+
+**PO Token (для современных видео):**
+
+YouTube постепенно вводит обязательное использование "PO Token" для скачивания. Если cookies не помогают:
+- Изучите [PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)
+- Рекомендуется использовать `mweb` клиент с PO Token
+- По умолчанию yt-dlp пытается использовать клиенты без токена, но некоторые форматы могут быть недоступны
+
+**Дополнительная информация:**
+- [Как правильно экспортировать YouTube cookies](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies)
+- [Типичные ошибки YouTube](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#common-youtube-errors)
+- Рекомендуется добавить задержку 5-10 секунд между запросами
+- Лимит для гостей: ~300 видео/час, для аккаунтов: ~2000 видео/час
 
 ### Запуск через Docker Compose
 
