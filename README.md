@@ -9,12 +9,13 @@
 ## Возможности
 
 - Получение прямой ссылки на видео без загрузки на сервер
-- Скачивание видео на сервер с выбором качества
+- Скачивание видео на сервер с выбором качества (sync/async)
 - Получение полной информации о видео
 - Поддержка различных форматов и качества
 - Health check endpoint для мониторинга
 - Автоматическая публикация на Docker Hub и GitHub Container Registry
 - Поддержка платформ: linux/amd64, linux/arm64
+- Абсолютные ссылки как для внешнего, так и для внутреннего контура
 
 ## Установка
 
@@ -82,6 +83,8 @@ services:
       # Public base URL for generating absolute download links (no trailing slash)
       # Example for reverse-proxy on a subpath:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+      # Optional internal base URL for links inside your private network (Docker/k8s)
+      INTERNAL_BASE_URL: ${INTERNAL_BASE_URL}
       # API Key for authentication (Bearer token)
       # If not set, API will work without authentication (not recommended for production)
       # Generate secure key: openssl rand -hex 32
@@ -167,12 +170,12 @@ Content-Type: application/json
   "video_id": "pj8lIC7kP6I",
   "title": "Название видео",
   "filename": "video_20251114_212811.mp4",
-  "file_path": "/app/tasks/ab12cd34.../output/video_20251114_212811.mp4",
   "file_size": 15728640,
-  "download_url": "http://localhost:5000/download_file/video_20251114_212811.mp4",
-  "download_path": "/download_file/video_20251114_212811.mp4",
   "task_download_path": "/download/ab12cd34.../output/video_20251114_212811.mp4",
+  "task_download_url": "http://localhost:5000/download/ab12cd34.../output/video_20251114_212811.mp4",
+  "task_download_url_internal": "http://service.local:5000/download/ab12cd34.../output/video_20251114_212811.mp4",
   "metadata_url": "/download/ab12cd34.../metadata.json",
+  "metadata_url_internal": "http://service.local:5000/download/ab12cd34.../metadata.json",
   "duration": 180,
   "resolution": "1280x720",
   "ext": "mp4",
@@ -186,8 +189,10 @@ Content-Type: application/json
 {
   "task_id": "ab12cd34-...",
   "status": "processing",
-  "check_status_url": "/task_status/ab12cd34-...",
-  "metadata_url": "/download/ab12cd34.../metadata.json",
+  "check_status_url": "http://public.example.com/task_status/ab12cd34-...",
+  "check_status_url_internal": "http://service.local/task_status/ab12cd34-...",
+  "metadata_url": "http://public.example.com/download/ab12cd34.../metadata.json",
+  "metadata_url_internal": "http://service.local/download/ab12cd34.../metadata.json",
   "client_meta": {"videoId": "pj8lIC7kP6I"}
 }
 ```
@@ -202,13 +207,10 @@ Content-Type: application/json
 GET /task_status/<task_id>
 ```
 
-Ответ:
-```json
-{
-  "status": "completed|processing|error",
-  ...
-}
-```
+Ответ (варианты):
+- status=processing: `{ "task_id": "...", "status": "processing" }`
+- status=completed: включает поля `task_download_path`, `task_download_url`, `task_download_url_internal`, `metadata_url`, `metadata_url_internal`, а также медиа-поля (`filename`, `duration`, `resolution`, `ext`, `title`, `video_id`).
+- status=error: включает `error_type`, `error_message`, `user_action`, по возможности `raw_error`.
 
 ### 4. Скачать результат или метаданные
 
@@ -242,18 +244,6 @@ Content-Type: application/json
 {
   "video_id": "VIDEO_ID",
   "title": "Название видео",
-  "filename": "video_20240115_103000.mp4",
-  "file_path": "/app/downloads/video_20240115_103000.mp4",
-  "file_size": 15728640,
-  "download_url": "http://youtube_downloader:5000/download_file/video_20240115_103000.mp4",
-  "download_path": "/download_file/video_20240115_103000.mp4",
-  "duration": 180,
-  "resolution": "1280x720",
-  "ext": "mp4",
-  "note": "Use download_url (full URL) or download_path (relative) to get the file. File will auto-delete after 1 hour.",
-  "processed_at": "2024-01-15T10:30:00.123456"
-  "video_id": "VIDEO_ID",
-  "title": "Название видео",
   "direct_url": "https://...",
   "duration": 180,
   "filesize": 15728640,
@@ -263,7 +253,7 @@ Content-Type: application/json
   "thumbnail": "https://...",
   "uploader": "Channel Name",
   "upload_date": "20240115",
-  "http_headers": {...},
+  "http_headers": {"User-Agent": "..."},
   "expiry_warning": "URL expires in a few hours. Use immediately or call /download_video to save permanently.",
   "processed_at": "2024-01-15T10:30:00.123456"
 }
@@ -285,80 +275,27 @@ services:
 
 Перезапустите n8n после изменения конфигурации.
 
-**Шаг 1: HTTP Request Node (Получить URL)**
-```
-Method: POST
-URL: http://youtube_downloader:5000/download_video
-Body: {"url": "https://youtube.com/watch?v=..."}
-Response Format: JSON
-```
+Вариант A (sync, проще):
+1) POST http://youtube_downloader:5000/download_video (Body: `{ "url": "..." }`)
+2) В ответе используйте `task_download_url` для загрузки файла (Response Format: File, Binary Property: data)
 
-**Шаг 2: HTTP Request Node (Скачать файл)**
-```
-Method: GET
-URL: {{ $json.download_url }}
-Response Format: File  ⚠️ ВАЖНО: Выберите "File", НЕ "String"!
-Binary Property: data
-```
+Вариант B (async, надёжнее для длительных задач):
+1) POST /download_video c `{"url":"...","async":true}` — получить `task_id`
+2) Циклически опрашивать `/task_status/{{task_id}}` до `status=completed`
+3) Скачать `{{ $json.task_download_url }}` (Response Format: File, Binary Property: data)
 
 **Критически важно**:
 1. n8n должен быть настроен с `N8N_DEFAULT_BINARY_DATA_MODE=filesystem`
 2. В Node 2 установите "Response Format" в значение "File"
 3. Без правильной конфигурации n8n будет пытаться загрузить видео в память и выдаст ошибку "Cannot create a string longer than 0x1fffffe8 characters"
 
-API автоматически вернёт полный URL с правильным хостом (например: `http://youtube_downloader:5000/download_file/video_20240115_103000.mp4`)
+API автоматически вернёт абсолютные URL. Для внутренних сценариев есть дублирующие поля `*_internal`.
 
-### 7. Скачать видео на сервер
+### 7. Legacy: download_file
 
-```bash
-POST /download_video
-Content-Type: application/json
+Endpoint `/download_file/<filename>` сохранён для обратной совместимости, но не рекомендуется. Основной способ — task-based ссылки (`/download/<task_id>/output/<file>`).
 
-{
-  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
-  "quality": "best[height<=720]"
-}
-```
-
-Ответ:
-```json
-{
-  "video_id": "VIDEO_ID",
-  "title": "Название видео",
-  "direct_url": "https://...",
-  "duration": 180,
-  "filesize": 15728640,
-  "ext": "mp4",
-  "resolution": "1280x720",
-  "fps": 30,
-  "thumbnail": "https://...",
-  "uploader": "Channel Name",
-  "upload_date": "20240115",
-  "http_headers": {},
-  "expiry_warning": "URL expires in a few hours. Use immediately or call /download_video to save permanently.",
-  "processed_at": "2024-01-15T10:30:00.123456"
-  "video_id": "VIDEO_ID",
-  "title": "Название видео",
-  "filename": "video.mp4",
-  "file_path": "/app/downloads/tmp123/video.mp4",
-  "file_size": 15728640,
-  "download_url": "/download_file/tmp123/video.mp4",
-  "duration": 180,
-  "processed_at": "2024-01-15T10:30:00.123456"
-}
-```
-
-### 8. Скачать файл с сервера
-
-```bash
-GET /download_file/<filename>
-```
-
-Возвращает файл для скачивания. Пример: `/download_file/video_20240115_103000.mp4`
-
-**Примечание**: `/download_file/` - это API endpoint (URL), а `/app/downloads/` - физический путь к файлам внутри Docker контейнера.
-
-### 9. Получить информацию о видео
+### 8. Получить информацию о видео
 
 ```bash
 POST /get_video_info
@@ -514,10 +451,20 @@ python app.py
 
 ## Конфигурация и аутентификация
 
-- `PUBLIC_BASE_URL`: если задан вместе с `API_KEY`, API включает аутентификацию и будет возвращать абсолютные ссылки на скачивание, используя этот базовый URL.
+- `PUBLIC_BASE_URL`: если задан вместе с `API_KEY`, API включает аутентификацию и возвращает абсолютные внешние ссылки по этому базовому URL. Если `PUBLIC_BASE_URL` задан без `API_KEY`, он игнорируется, режим считается внутренним (auth=disabled).
 - `API_KEY`: секретный ключ. Используйте заголовок `Authorization: Bearer <API_KEY>` (поддерживается и `X-API-Key`).
+- `INTERNAL_BASE_URL`: опциональный базовый URL внутреннего контура (Docker/k8s). Если не задан, внутренние ссылки строятся от `request.host_url`.
 - `WORKERS`: число воркеров Gunicorn. Для 2+ воркеров рекомендуется Redis.
 - `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`: конфигурация Redis. По умолчанию используется DB 0. Если вы делите один Redis с другим сервисом (например, видеопроцессор использует DB 0), задайте отдельную DB (например, 1).
+
+### Как строятся ссылки
+- В ответах возвращаются как минимум относительные пути `task_download_path`.
+- Абсолютные внешние ссылки: `task_download_url`, `metadata_url` (используют `PUBLIC_BASE_URL`, если он активен, иначе `request.host_url`).
+- Абсолютные внутренние ссылки: `task_download_url_internal`, `metadata_url_internal` (используют `INTERNAL_BASE_URL`, если задан; иначе `request.host_url`).
+
+### Режимы
+- Internal (auth=disabled): без `API_KEY` и без активного `PUBLIC_BASE_URL`. Ссылки будут строиться от `request.host_url`.
+- Public (auth=enabled): `PUBLIC_BASE_URL` + `API_KEY` заданы. Возвращаются внешние и внутренние абсолютные URL.
 
 ## Troubleshooting для n8n
 
@@ -559,10 +506,10 @@ docker run -e N8N_DEFAULT_BINARY_DATA_MODE=filesystem ...
 
 **Причина**: Используется относительный путь вместо полного URL.
 
-**Решение**: Используйте поле `download_url` из ответа, а не `download_path`:
+**Решение**: Используйте поле `task_download_url` из ответа статуса/синхронного запроса:
 ```
-Правильно: {{ $json.download_url }}
-Неправильно: {{ $json.download_path }}
+Правильно: {{ $json.task_download_url }}
+Неправильно: {{ $json.task_download_path }}
 ```
 
 ### Ошибка: "HTTP Error 403: Forbidden"
@@ -593,7 +540,7 @@ MIT License
 ## TODO
 
 - [ ] Добавить rate limiting
-- [ ] Добавить очистку старых файлов
+- [ ] Добавить очистку старых файлов (частично реализовано)
 - [ ] Добавить поддержку плейлистов
 - [ ] Добавить webhook уведомления
 - [ ] Добавить queue для больших загрузок
