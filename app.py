@@ -421,6 +421,7 @@ def download_video():
         elif os.path.exists(COOKIES_PATH):
             ydl_opts['cookiefile'] = COOKIES_PATH
         
+        logger.info(f"[sync] yt-dlp opts for {video_url}: {ydl_opts}")
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
@@ -679,6 +680,8 @@ def _background_download(task_id: str, video_url: str, quality: str, client_meta
             ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
         elif os.path.exists(COOKIES_PATH):
             ydl_opts['cookiefile'] = COOKIES_PATH
+        
+        logger.info(f"[async bg] yt-dlp opts for {video_url}: {ydl_opts}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
             ext = info.get('ext', 'mp4')
