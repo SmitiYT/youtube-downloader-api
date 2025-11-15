@@ -258,16 +258,16 @@ def get_task_dir(task_id: str) -> str:
     return os.path.join(TASKS_DIR, task_id)
 
 def get_task_output_dir(task_id: str) -> str:
-    return os.path.join(get_task_dir(task_id), "output")
+    return get_task_dir(task_id)
 
 def create_task_dirs(task_id: str):
     os.makedirs(get_task_output_dir(task_id), exist_ok=True)
 
 def build_download_endpoint(task_id: str, filename: str) -> str:
-    return f"/download/{task_id}/output/{filename}"
+    return f"/download/{task_id}/{filename}"
 
 def build_storage_rel_path(task_id: str, filename: str) -> str:
-    return f"{task_id}/output/{filename}"
+    return f"{task_id}/{filename}"
 
 def save_task_metadata(task_id: str, metadata: Any):
     meta_path = os.path.join(get_task_dir(task_id), "metadata.json")
