@@ -51,10 +51,8 @@ def log_startup_info():
     if INTERNAL_BASE_URL:
         logger.info(f"Internal base URL: {INTERNAL_BASE_URL}")
     # Некоторые константы могут быть ещё не определены при импорте — проверяем наличие
-    if 'DOWNLOAD_DIR' in globals():
-        logger.info(f"Downloads dir: {DOWNLOAD_DIR}")
     if 'TASKS_DIR' in globals():
-        logger.info(f"Tasks dir: {TASKS_DIR}")
+        logger.info(f"Tasks dir: {TASKS_DIR} (files stored here)")
     if 'COOKIES_PATH' in globals():
         logger.info(f"Cookies file: {COOKIES_PATH} {'(exists)' if os.path.exists(COOKIES_PATH) else '(not found)'}")
     if 'MAX_CLIENT_META_BYTES' in globals():
