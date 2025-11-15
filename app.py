@@ -1,6 +1,6 @@
 
 import os
-import os
+import json
 import logging
 from flask import Flask, request, jsonify, send_file
 import requests
@@ -77,7 +77,28 @@ def log_startup_info():
         else:
             logger.info(f"Cleanup: TTL={CLEANUP_TTL_SECONDS}s ({CLEANUP_TTL_SECONDS//60}min)")
     logger.info(f"Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
+    # Отобразим предполагаемое число воркеров (если задали WORKERS)
+    try:
+        workers_env = os.getenv('WORKERS')
+        if workers_env:
+            logger.info(f"Workers (gunicorn): {workers_env}")
+    except Exception:
+        pass
     logger.info("=" * 60)
+
+def _log_startup_once():
+    """Логируем старт приложения один раз на контейнер (атомарный маркер в /tmp)."""
+    marker = "/tmp/yt_dlp_api_start_logged"
+    try:
+        fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        os.close(fd)
+        log_startup_info()
+    except FileExistsError:
+        # Уже логировали в этом контейнере — пропускаем
+        pass
+    except Exception:
+        # На всякий случай логируем, если не удалось создать маркер
+        log_startup_info()
 
 def get_yt_dlp_version():
     try:
@@ -417,8 +438,8 @@ def classify_youtube_error(error_message: str) -> dict:
             "user_action": "Review error manually"
         }
 
-# Вызов логирования после определения всех лимитов и функций (однократно при импорте)
-log_startup_info()
+# Вызов логирования после определения всех лимитов и функций — выводим один раз на контейнер
+_log_startup_once()
 
 # ============================================
 # CLEANUP
