@@ -29,9 +29,6 @@
 ```bash
 docker pull alexbic/youtube-downloader-api:latest
 ```
-
-### Из GitHub Container Registry
-
 ```bash
 docker pull ghcr.io/alexbic/youtube-downloader-api:latest
 ```
@@ -48,7 +45,6 @@ docker run -d -p 5000:5000 --name yt-downloader alexbic/youtube-downloader-api:l
 
 ```bash
 docker run -d -p 5000:5000 --name yt-downloader ghcr.io/alexbic/youtube-downloader-api:latest
-```
 
 ### Запуск с cookies для обхода защиты YouTube
 
@@ -59,29 +55,66 @@ YouTube может периодически блокировать загруз�
 - Cookies, экспортированные из обычной вкладки, быстро протухают
 - Нужно экспортировать через **приватное окно** по специальной методике
 
-**Правильный способ экспорта cookies (рекомендуется):**
+#### Метод 1: Через расширение браузера (рекомендуется)
+
+**Шаг 1. Включите расширение в режиме инкогнито:**
+
+**Chrome:**
+1. Откройте `chrome://extensions/`
+2. Найдите расширение [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+3. Нажмите **"Подробнее"** (Details)
+4. Включите **"Разрешить использование в режиме инкогнито"** (Allow in incognito)
+
+**Firefox:**
+1. Откройте `about:addons`
+2. Найдите расширение [cookies.txt](https://addons.mozilla.org/ru/firefox/addon/cookies-txt/)
+3. Включите **"Выполнять в приватных окнах"** (Run in Private Windows)
+
+**Шаг 2. Экспортируйте cookies:**
 
 1. Откройте **новое приватное/инкогнито окно** и залогиньтесь на YouTube
-2. В **той же вкладке** перейдите на `https://www.youtube.com/robots.txt`
-3. Экспортируйте cookies для `youtube.com` через расширение браузера:
-   - Chrome: [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
-   - Firefox: [cookies.txt](https://addons.mozilla.org/ru/firefox/addon/cookies-txt/)
-4. **Сразу закройте** приватное окно, чтобы сессия больше не открывалась
+2. Перейдите на `https://www.youtube.com/robots.txt`
+3. Экспортируйте cookies для `youtube.com` через расширение (теперь оно работает!)
+4. **Сразу закройте** приватное окно
 
-**Примечание:** НЕ используйте `--cookies-from-browser` для экспорта из приватной сессии — он экспортирует cookies из обычного браузера, а не из инкогнито.
+#### Метод 2: Через DevTools (без расширений)
 
-5. Положите `cookies.txt` рядом с `docker-compose.yml` и раскомментируйте строку в volume:
+1. Откройте **новое приватное/инкогнито окно** и залогиньтесь на YouTube
+2. Перейдите на `https://www.youtube.com/robots.txt`
+3. Откройте **DevTools** (F12 или Cmd+Option+I)
+4. Перейдите на вкладку **Console**
+5. Скопируйте и выполните команду:
+
+```javascript
+copy(document.cookie.split('; ').map(c => {
+  const [name, ...v] = c.split('=');
+  return `.youtube.com\tTRUE\t/\tTRUE\t0\t${name}\t${v.join('=')}`;
+}).join('\n'))
+```
+
+6. Cookies скопированы в буфер обмена — вставьте в файл `cookies.txt`
+7. **Добавьте в начало файла:** `# Netscape HTTP Cookie File`
+8. **Сразу закройте** приватное окно
+
+**Примечания:**
+- НЕ используйте `--cookies-from-browser` — он берёт cookies из обычного браузера
+- DevTools даёт базовый формат; для продакшена лучше расширение
+
+#### Использование cookies:
+
+1. Положите `cookies.txt` рядом с `docker-compose.yml`
+2. Раскомментируйте строку:
 
 ```yaml
 volumes:
-  - ./cookies.txt:/app/cookies.txt  # <-- раскомментируйте эту строку
+  - ./cookies.txt:/app/cookies.txt
 ```
 
-6. Перезапустите контейнер: `docker-compose up -d`
+3. Перезапустите: `docker-compose up -d`
 
-**Готово!** API автоматически использует cookies и обновляет их временные метки перед каждым запросом.
+**Готово!** API автоматически использует cookies и обновляет timestamp перед каждым запросом.
 
-**PO Token (для современных видео):**
+#### PO Token (для современных видео):
 
 YouTube постепенно вводит обязательное использование "PO Token" для скачивания. Если cookies не помогают:
 - Изучите [PO Token Guide](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide)
@@ -100,8 +133,6 @@ YouTube постепенно вводит обязательное исполь�
 version: '3.8'
 services:
   youtube-downloader:
-    image: alexbic/youtube-downloader-api:latest
-    # или используйте GitHub Container Registry:
     # image: ghcr.io/alexbic/youtube-downloader-api:latest
     ports:
       - "5000:5000"
@@ -119,15 +150,8 @@ services:
       # Generate secure key: openssl rand -hex 32
       API_KEY: ${API_KEY}
 
-      # Logging controls
-      # Global app logging level: DEBUG|INFO|WARNING|ERROR|CRITICAL (default: INFO)
-      LOG_LEVEL: ${LOG_LEVEL}
       # Progress logging for yt-dlp: off|compact|full (default: off)
       PROGRESS_LOG: ${PROGRESS_LOG}
-      # Step in percent for compact progress (default: 10)
-      PROGRESS_STEP: ${PROGRESS_STEP}
-      # Extra diagnostics (optional): log resolved yt-dlp options
-      LOG_YTDLP_OPTS: ${LOG_YTDLP_OPTS}
       # Forward yt-dlp warnings to app logs (optional)
       LOG_YTDLP_WARNINGS: ${LOG_YTDLP_WARNINGS}
 
