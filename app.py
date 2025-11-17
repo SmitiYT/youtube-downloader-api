@@ -1,11 +1,12 @@
 
 import os
+import threading
 import json
 import logging
 from flask import Flask, request, jsonify, send_file
 import requests
 import yt_dlp
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import threading
 from functools import wraps
@@ -35,6 +36,8 @@ CLEANUP_TTL_SECONDS = 86400
 WEBHOOK_RETRY_ATTEMPTS = int(os.getenv('WEBHOOK_RETRY_ATTEMPTS', 3))
 WEBHOOK_RETRY_INTERVAL_SECONDS = float(os.getenv('WEBHOOK_RETRY_INTERVAL_SECONDS', 5))
 WEBHOOK_TIMEOUT_SECONDS = float(os.getenv('WEBHOOK_TIMEOUT_SECONDS', 8))
+# Периодические фоновые ретраи вебхуков (переживают рестарты, пока живёт задача)
+WEBHOOK_BACKGROUND_INTERVAL_SECONDS = float(os.getenv('WEBHOOK_BACKGROUND_INTERVAL_SECONDS', 300))
 DEFAULT_WEBHOOK_URL = os.getenv('DEFAULT_WEBHOOK_URL')
 _WEBHOOK_HEADERS_ENV = os.getenv('WEBHOOK_HEADERS')
 
@@ -355,6 +358,39 @@ def save_task_metadata(task_id: str, metadata: Any):
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
 
+def _webhook_state_path(task_id: str) -> str:
+    return os.path.join(get_task_dir(task_id), "webhook.json")
+
+def save_webhook_state(task_id: str, state: dict):
+    try:
+        os.makedirs(get_task_dir(task_id), exist_ok=True)
+        with open(_webhook_state_path(task_id), 'w', encoding='utf-8') as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def load_webhook_state(task_id: str) -> dict | None:
+    try:
+        with open(_webhook_state_path(task_id), 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def _load_metadata_for_payload(task_id: str) -> dict | None:
+    try:
+        meta_path = os.path.join(get_task_dir(task_id), "metadata.json")
+        if not os.path.exists(meta_path):
+            return None
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list) and data:
+            return data[0]
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        return None
+    return None
+
 # ============================================
 # TASK STORAGE (Redis or Memory)
 # ============================================
@@ -558,6 +594,102 @@ def classify_youtube_error(error_message: str) -> dict:
 
 # Вызов логирования после определения всех лимитов и функций — выводим один раз на контейнер
 _log_startup_once()
+
+# ============================================
+# BACKGROUND WEBHOOK RESENDER
+# ============================================
+def _try_send_webhook_once(url: str, payload: dict, task_id: str) -> bool:
+    headers = {"Content-Type": "application/json"}
+    try:
+        for k, v in (WEBHOOK_HEADERS or {}).items():
+            if k.lower() == 'content-type':
+                continue
+            headers[k] = v
+    except Exception:
+        pass
+    try:
+        resp = requests.post(url, headers=headers, data=json.dumps(payload, ensure_ascii=False), timeout=WEBHOOK_TIMEOUT_SECONDS)
+        if 200 <= resp.status_code < 300:
+            logger.info(f"[{task_id[:8]}] Webhook re-delivered successfully (HTTP {resp.status_code})")
+            return True
+        preview = (resp.text or "")[:500]
+        if preview:
+            logger.warning(f"[{task_id[:8]}] Webhook re-delivery failed HTTP {resp.status_code}; body: {preview}")
+        else:
+            logger.warning(f"[{task_id[:8]}] Webhook re-delivery failed HTTP {resp.status_code} (empty body)")
+        return False
+    except Exception as e:
+        logger.warning(f"[{task_id[:8]}] Webhook re-delivery exception: {e}")
+        return False
+
+def _webhook_resender_loop():
+    logger.info(f"Webhook resender: started; interval={WEBHOOK_BACKGROUND_INTERVAL_SECONDS}s")
+    while True:
+        try:
+            now = datetime.now()
+            for task_id in os.listdir(TASKS_DIR):
+                tdir = os.path.join(TASKS_DIR, task_id)
+                if not os.path.isdir(tdir):
+                    continue
+                st = load_webhook_state(task_id)
+                if not st:
+                    continue
+                if st.get('status') == 'delivered':
+                    continue
+                url = st.get('url') or DEFAULT_WEBHOOK_URL
+                if not url:
+                    continue
+                next_retry = st.get('next_retry')
+                if next_retry:
+                    try:
+                        if now < datetime.fromisoformat(next_retry):
+                            continue
+                    except Exception:
+                        pass
+                meta = _load_metadata_for_payload(task_id)
+                if not meta:
+                    continue
+                payload = {
+                    'task_id': meta.get('task_id', task_id),
+                    'status': meta.get('status', 'completed'),
+                    'video_id': meta.get('video_id'),
+                    'title': meta.get('title'),
+                    'filename': meta.get('filename'),
+                    'download_endpoint': meta.get('download_endpoint'),
+                    'storage_rel_path': meta.get('storage_rel_path'),
+                    'duration': meta.get('duration'),
+                    'resolution': meta.get('resolution'),
+                    'ext': meta.get('ext'),
+                    'created_at': meta.get('created_at'),
+                    'completed_at': meta.get('completed_at'),
+                }
+                for k in ('task_download_url', 'metadata_url', 'task_download_url_internal', 'metadata_url_internal', 'client_meta', 'operation', 'error_type', 'error_message', 'user_action', 'raw_error', 'failed_at'):
+                    if k in meta:
+                        payload[k] = meta[k]
+                ok = _try_send_webhook_once(url, payload, task_id)
+                if ok:
+                    st.update({
+                        'status': 'delivered',
+                        'last_attempt': datetime.now().isoformat(),
+                        'attempts': int(st.get('attempts') or 0) + 1,
+                        'last_status': 200,
+                        'last_error': None,
+                        'next_retry': None,
+                    })
+                else:
+                    st.update({
+                        'status': 'pending',
+                        'last_attempt': datetime.now().isoformat(),
+                        'attempts': int(st.get('attempts') or 0) + 1,
+                        'next_retry': (datetime.now() + timedelta(seconds=WEBHOOK_BACKGROUND_INTERVAL_SECONDS)).isoformat(),
+                    })
+                save_webhook_state(task_id, st)
+        except Exception:
+            pass
+        time.sleep(max(1.0, WEBHOOK_BACKGROUND_INTERVAL_SECONDS))
+
+_resender_thread = threading.Thread(target=_webhook_resender_loop, name='webhook-resender', daemon=True)
+_resender_thread.start()
 
 # ============================================
 # CLEANUP
@@ -897,6 +1029,15 @@ def task_status(task_id):
                             resp["metadata_url_internal"] = build_internal_url(f"/download/{task_id}/metadata.json")
                     if mi.get('client_meta') is not None:
                         resp['client_meta'] = mi['client_meta']
+                    # Включаем состояние вебхука, если есть
+                    try:
+                        st = load_webhook_state(task_id)
+                        if st:
+                            resp['webhook_status'] = st.get('status')
+                            resp['webhook_attempts'] = int(st.get('attempts') or 0)
+                            resp['webhook_next_retry'] = st.get('next_retry')
+                    except Exception:
+                        pass
                     return jsonify(resp)
                 # error/other — объект
                 if isinstance(meta, dict):
@@ -912,6 +1053,15 @@ def task_status(task_id):
                         resp['raw_error'] = meta['raw_error']
                     if meta.get('client_meta') is not None:
                         resp['client_meta'] = meta['client_meta']
+                    # Включаем состояние вебхука, если есть
+                    try:
+                        st = load_webhook_state(task_id)
+                        if st:
+                            resp['webhook_status'] = st.get('status')
+                            resp['webhook_attempts'] = int(st.get('attempts') or 0)
+                            resp['webhook_next_retry'] = st.get('next_retry')
+                    except Exception:
+                        pass
                     return jsonify(resp)
         except Exception:
             # игнорируем и продолжаем к следующему fallback
@@ -962,6 +1112,15 @@ def task_status(task_id):
     # Добавляем client_meta строго последним, если присутствует
     if task.get('client_meta') is not None:
         resp['client_meta'] = task['client_meta']
+    # Включаем состояние вебхука, если есть
+    try:
+        st = load_webhook_state(task_id)
+        if st:
+            resp['webhook_status'] = st.get('status')
+            resp['webhook_attempts'] = int(st.get('attempts') or 0)
+            resp['webhook_next_retry'] = st.get('next_retry')
+    except Exception:
+        pass
     return jsonify(resp)
 
 def _background_download(
@@ -990,6 +1149,15 @@ def _background_download(
         except Exception:
             pass
         body = json.dumps(payload, ensure_ascii=False)
+        # Инициализируем/обновляем файл состояния вебхука
+        st = load_webhook_state(task_id) or {}
+        st.update({
+            "task_id": task_id,
+            "url": webhook_url,
+            "status": st.get("status") or "pending",
+            "attempts": int(st.get("attempts") or 0),
+        })
+        save_webhook_state(task_id, st)
         attempts = max(1, WEBHOOK_RETRY_ATTEMPTS)
         for i in range(1, attempts + 1):
             try:
@@ -997,6 +1165,15 @@ def _background_download(
                 resp = requests.post(webhook_url, headers=headers, data=body, timeout=WEBHOOK_TIMEOUT_SECONDS)
                 if 200 <= resp.status_code < 300:
                     logger.info(f"[{task_id[:8]}] Webhook delivered successfully (HTTP {resp.status_code})")
+                    st.update({
+                        "status": "delivered",
+                        "attempts": int(st.get("attempts") or 0) + 1,
+                        "last_attempt": datetime.now().isoformat(),
+                        "last_status": int(resp.status_code),
+                        "last_error": None,
+                        "next_retry": None
+                    })
+                    save_webhook_state(task_id, st)
                     return
                 # Логируем тело ответа (усечённое) для упрощения диагностики в n8n
                 resp_preview = (resp.text or "")[:500]
@@ -1009,10 +1186,20 @@ def _background_download(
                 logger.warning(f"[{task_id[:8]}] Webhook attempt {i} failed: {e}")
                 # сетевые/таймаут ошибки — пробуем снова
                 pass
+            # Обновляем счётчик попыток и планируем следующий фоновый ретрай
+            st.update({
+                "status": "pending",
+                "attempts": int(st.get("attempts") or 0) + 1,
+                "last_attempt": datetime.now().isoformat(),
+                "last_status": None,
+                "last_error": None,
+                "next_retry": (datetime.now() + timedelta(seconds=WEBHOOK_BACKGROUND_INTERVAL_SECONDS)).isoformat()
+            })
+            save_webhook_state(task_id, st)
             if i < attempts:
                 time.sleep(max(0.0, WEBHOOK_RETRY_INTERVAL_SECONDS))
         # Все попытки исчерпаны — продолжаем без падения
-        logger.error(f"[{task_id[:8]}] Webhook delivery failed after {attempts} attempts")
+        logger.error(f"[{task_id[:8]}] Webhook delivery failed after {attempts} attempts; will retry in background")
 
     try:
         update_task(task_id, {"status": "downloading"})
