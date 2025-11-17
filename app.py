@@ -35,6 +35,42 @@ CLEANUP_TTL_SECONDS = int(os.getenv('CLEANUP_TTL_SECONDS', 3600))
 WEBHOOK_RETRY_ATTEMPTS = int(os.getenv('WEBHOOK_RETRY_ATTEMPTS', 3))
 WEBHOOK_RETRY_INTERVAL_SECONDS = float(os.getenv('WEBHOOK_RETRY_INTERVAL_SECONDS', 5))
 WEBHOOK_TIMEOUT_SECONDS = float(os.getenv('WEBHOOK_TIMEOUT_SECONDS', 8))
+DEFAULT_WEBHOOK_URL = os.getenv('DEFAULT_WEBHOOK_URL')
+_WEBHOOK_HEADERS_ENV = os.getenv('WEBHOOK_HEADERS')
+
+def _parse_webhook_headers(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        obj = json.loads(raw)
+        if isinstance(obj, dict):
+            return {str(k): str(v) for k, v in obj.items()}
+    except Exception:
+        pass
+    headers: dict[str, str] = {}
+    # Допускаем форматы: "Key: Value" или "Key=Value", разделители: \n, ;, ,
+    parts = []
+    for sep in ['\n', ';', ',']:
+        if sep in raw:
+            parts = [p for p in raw.split(sep) if p.strip()]
+            break
+    if not parts:
+        parts = [raw]
+    for p in parts:
+        if ':' in p:
+            k, v = p.split(':', 1)
+        elif '=' in p:
+            k, v = p.split('=', 1)
+        else:
+            # одиночное значение игнорируем
+            continue
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if k:
+            headers[k] = v
+    return headers
+
+WEBHOOK_HEADERS = _parse_webhook_headers(_WEBHOOK_HEADERS_ENV)
 
 API_KEY = os.getenv('API_KEY')
 PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL') or os.getenv('EXTERNAL_BASE_URL')
@@ -77,6 +113,14 @@ def log_startup_info():
         else:
             logger.info(f"Cleanup: TTL={CLEANUP_TTL_SECONDS}s ({CLEANUP_TTL_SECONDS//60}min)")
     logger.info(f"Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
+    if DEFAULT_WEBHOOK_URL:
+        logger.info(f"Webhook: default_url set -> {DEFAULT_WEBHOOK_URL}")
+    if WEBHOOK_HEADERS:
+        try:
+            masked = {k: ('***' if k.lower() in ('authorization', 'x-api-key', 'x-auth-token') else v) for k, v in WEBHOOK_HEADERS.items()}
+            logger.info(f"Webhook: extra headers -> {masked}")
+        except Exception:
+            logger.info("Webhook: extra headers configured")
     # Отобразим предполагаемое число воркеров (если задали WORKERS)
     try:
         workers_env = os.getenv('WORKERS')
@@ -558,7 +602,7 @@ def download_video():
         quality = data.get('quality', 'best[height<=720]')
         cookies_from_browser = data.get('cookiesFromBrowser')
         # webhook для async режима
-        webhook_url = data.get('webhook_url') or data.get('webhook') or data.get('callback_url')
+        webhook_url = data.get('webhook_url') or data.get('webhook') or data.get('callback_url') or DEFAULT_WEBHOOK_URL
         if webhook_url is not None:
             try:
                 if not isinstance(webhook_url, str) or not webhook_url.lower().startswith(("http://", "https://")):
@@ -900,6 +944,14 @@ def _background_download(
         if not webhook_url:
             return
         headers = {"Content-Type": "application/json"}
+        # Добавляем пользовательские заголовки, не позволяя переопределять Content-Type
+        try:
+            for k, v in (WEBHOOK_HEADERS or {}).items():
+                if k.lower() == 'content-type':
+                    continue
+                headers[k] = v
+        except Exception:
+            pass
         body = json.dumps(payload, ensure_ascii=False)
         attempts = max(1, WEBHOOK_RETRY_ATTEMPTS)
         for i in range(1, attempts + 1):

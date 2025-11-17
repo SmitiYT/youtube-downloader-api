@@ -351,6 +351,8 @@ Content-Type: application/json
 | `WEBHOOK_RETRY_ATTEMPTS` | `3` | Max webhook delivery attempts. |
 | `WEBHOOK_RETRY_INTERVAL_SECONDS` | `5` | Delay between webhook retries (seconds). |
 | `WEBHOOK_TIMEOUT_SECONDS` | `8` | Webhook request timeout (seconds). |
+| `DEFAULT_WEBHOOK_URL` | — | Fallback webhook URL (async). Used when request has no `webhook_url`. Must start with http(s)://, < 2048 chars. |
+| `WEBHOOK_HEADERS` | — | Extra headers for webhook POST. JSON object or list: `{"Authorization":"Bearer XXX","X-Source":"ytdl"}` OR `Authorization: Bearer XXX; X-Source: ytdl`. Sensitive headers (Authorization, X-API-Key, X-Auth-Token) masked in startup logs. |
 | **Logging** |||
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
 | `PROGRESS_LOG` | `off` | yt-dlp progress logging (off, compact, full). |
@@ -473,6 +475,65 @@ YouTube is gradually requiring "PO Token" for downloads. If cookies don't help:
 ## Webhook Support
 
 If `webhook_url` is provided in `POST /download_video`, the service POSTs to the URL on task completion.
+
+### Default Webhook URL
+
+Set `DEFAULT_WEBHOOK_URL` to avoid specifying `webhook_url` in every async request:
+
+```yaml
+environment:
+  DEFAULT_WEBHOOK_URL: "https://hooks.internal/downloader"
+```
+
+If the request body omits `webhook_url`, the fallback is used. If both are set, the explicit `webhook_url` in the request overrides the default.
+
+Validation rules:
+- Must start with `http://` or `https://`
+- Length < 2048 chars
+- Applied only for async tasks (`"async": true`)
+
+### Custom Webhook Headers
+
+Use `WEBHOOK_HEADERS` to inject auth or tracing headers into every webhook POST without modifying client requests.
+
+Allowed formats:
+1. JSON object (preferred)
+   ```bash
+   WEBHOOK_HEADERS='{"Authorization":"Bearer abc123","X-Source":"ytdl"}'
+   ```
+2. Delimited list (`;`, `,` or newlines)
+   ```bash
+   WEBHOOK_HEADERS='Authorization: Bearer abc123; X-Source: ytdl'
+   ```
+
+Parsing rules:
+- Each entry: `Key: Value` or `Key=Value`
+- Quotes around values are stripped
+- Invalid fragments are ignored silently
+- `Content-Type` in `WEBHOOK_HEADERS` is ignored (service always sends `application/json`)
+
+Security & Observability:
+- Startup logs mask values for headers: `Authorization`, `X-API-Key`, `X-Auth-Token`
+- Use HTTPS for external endpoints
+- Prefer secrets/secure env injection for tokens (Docker secrets, orchestrator vaults)
+
+Example docker-compose override:
+```yaml
+services:
+  youtube-downloader:
+    environment:
+      DEFAULT_WEBHOOK_URL: "http://webhook:9001/webhook"
+      WEBHOOK_HEADERS: '{"Authorization":"Bearer local-test-token","X-Source":"ytdl"}'
+```
+
+Resulting webhook request headers (simplified):
+```
+Content-Type: application/json
+Authorization: Bearer local-test-token
+X-Source: ytdl
+```
+
+Note: Delivery uses retry policy (`WEBHOOK_RETRY_ATTEMPTS`, `WEBHOOK_RETRY_INTERVAL_SECONDS`, `WEBHOOK_TIMEOUT_SECONDS`). Failures never abort the main download process.
 
 **Success payload:**
 ```json

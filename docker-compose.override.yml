@@ -16,9 +16,22 @@ services:
       CLEANUP_TTL_SECONDS: 3600
       REDIS_INIT_RETRIES: 20
       REDIS_INIT_DELAY_SECONDS: 0.5
+      # Webhook defaults for local testing
+      DEFAULT_WEBHOOK_URL: "http://webhook:9001/webhook"
+      WEBHOOK_HEADERS: '{"Authorization": "Bearer local-test-token", "X-Source": "ytdl"}'
     ports:
       - "5002:5000"
     volumes:
       - ./tasks:/app/tasks
       # При необходимости раскомментируйте файл cookies
       # - ./cookies.txt:/app/cookies.txt
+
+  webhook:
+    image: python:3.11-slim
+    environment:
+      - PORT=9001
+    command: ["python", "/app/tools/webhook_server.py"]
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./:/app:ro
