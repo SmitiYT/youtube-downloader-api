@@ -677,23 +677,24 @@ def _webhook_resender_loop():
                             pass
                     
                     logger.info(f"[{task_id[:8]}] Resender: attempting webhook delivery (attempt #{int(st.get('attempts') or 0) + 1})")
-                payload = {
-                    'task_id': meta.get('task_id', task_id),
-                    'status': meta.get('status', 'completed'),
-                    'video_id': meta.get('video_id'),
-                    'title': meta.get('title'),
-                    'filename': meta.get('filename'),
-                    'download_endpoint': meta.get('download_endpoint'),
-                    'storage_rel_path': meta.get('storage_rel_path'),
-                    'duration': meta.get('duration'),
-                    'resolution': meta.get('resolution'),
-                    'ext': meta.get('ext'),
-                    'created_at': meta.get('created_at'),
-                    'completed_at': meta.get('completed_at'),
-                }
-                for k in ('task_download_url', 'metadata_url', 'task_download_url_internal', 'metadata_url_internal', 'client_meta', 'operation', 'error_type', 'error_message', 'user_action', 'raw_error', 'failed_at'):
-                    if k in meta:
-                        payload[k] = meta[k]
+                    
+                    payload = {
+                        'task_id': meta.get('task_id', task_id),
+                        'status': meta.get('status', 'completed'),
+                        'video_id': meta.get('video_id'),
+                        'title': meta.get('title'),
+                        'filename': meta.get('filename'),
+                        'download_endpoint': meta.get('download_endpoint'),
+                        'storage_rel_path': meta.get('storage_rel_path'),
+                        'duration': meta.get('duration'),
+                        'resolution': meta.get('resolution'),
+                        'ext': meta.get('ext'),
+                        'created_at': meta.get('created_at'),
+                        'completed_at': meta.get('completed_at'),
+                    }
+                    for k in ('task_download_url', 'metadata_url', 'task_download_url_internal', 'metadata_url_internal', 'client_meta', 'operation', 'error_type', 'error_message', 'user_action', 'raw_error', 'failed_at'):
+                        if k in meta:
+                            payload[k] = meta[k]
                     ok = _try_send_webhook_once(url, payload, task_id)
                     if ok:
                         st.update({
