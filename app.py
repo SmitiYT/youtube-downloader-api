@@ -624,6 +624,10 @@ def _try_send_webhook_once(url: str, payload: dict, task_id: str) -> bool:
 
 def _webhook_resender_loop():
     logger.info(f"Webhook resender: started; interval={WEBHOOK_BACKGROUND_INTERVAL_SECONDS}s")
+    if DEFAULT_WEBHOOK_URL:
+        logger.info(f"Webhook resender: DEFAULT_WEBHOOK_URL is set, will attempt delivery for tasks without webhook URL")
+    else:
+        logger.info("Webhook resender: DEFAULT_WEBHOOK_URL not set, skipping tasks without webhook URL")
     first_scan = True
     while True:
         try:
@@ -652,26 +656,30 @@ def _webhook_resender_loop():
                         save_webhook_state(task_id, st)
                     
                     if st.get('status') == 'delivered':
-                        logger.debug(f"[{task_id[:8]}] Resender: skipping (already delivered)")
+                        logger.debug(f"Resender: skipping task {task_id} (already delivered)")
                         continue
                     
                     meta = _load_metadata_for_payload(task_id)
                     if not meta:
-                        logger.debug(f"[{task_id[:8]}] Resender: skipping (no metadata)")
+                        logger.debug(f"Resender: skipping task {task_id} (no metadata)")
                         continue
                     
-                    # URL вебхука: сперва из состояния, затем из метаданных (webhook_url), затем дефолт
+                    # URL вебхука: приоритет - состояние (на чём остановились), затем метаданные, затем дефолт
                     url = st.get('url') or (meta.get('webhook_url') if isinstance(meta, dict) else None) or DEFAULT_WEBHOOK_URL
                     if not url:
-                        logger.debug(f"[{task_id[:8]}] Resender: skipping (no webhook URL)")
+                        logger.debug(f"Resender: skipping task {task_id} (no webhook URL and no DEFAULT_WEBHOOK_URL)")
                         continue
+                    # Если используем дефолтный URL, сохраняем его в состояние для последующих попыток
+                    if not st.get('url') and url == DEFAULT_WEBHOOK_URL:
+                        st['url'] = DEFAULT_WEBHOOK_URL
+                        save_webhook_state(task_id, st)
                     
                     next_retry = st.get('next_retry')
                     if next_retry:
                         try:
                             next_retry_dt = datetime.fromisoformat(next_retry)
                             if now < next_retry_dt:
-                                logger.debug(f"[{task_id[:8]}] Resender: skipping (next retry at {next_retry})")
+                                logger.debug(f"Resender: skipping task {task_id} (next retry at {next_retry})")
                                 continue
                         except Exception:
                             pass
