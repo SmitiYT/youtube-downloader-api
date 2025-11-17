@@ -20,11 +20,11 @@ services:
       DEFAULT_WEBHOOK_URL: "http://webhook:9001/webhook"
       WEBHOOK_HEADERS: '{"Authorization": "Bearer local-test-token", "X-Source": "ytdl"}'
       # Logging
-      LOG_LEVEL: "DEBUG"
+      LOG_LEVEL: "INFO"
     ports:
       - "5002:5000"
     volumes:
-      - ./tasks:/app/tasks
+      - ./testing/tasks:/app/tasks
       # При необходимости раскомментируйте файл cookies
       # - ./cookies.txt:/app/cookies.txt
 
@@ -32,8 +32,8 @@ services:
     image: python:3.11-slim
     environment:
       - PORT=9001
-    command: ["python", "/app/tools/webhook_server.py"]
+    command: ["python", "/app/webhook_server.py"]
     ports:
       - "9001:9001"
     volumes:
-      - ./:/app:ro
+      - ./testing/tools:/app:ro
