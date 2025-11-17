@@ -7,6 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](RELEASE_NOTES_v1.0.0.md)
 
+> ⚠️ **PUBLIC VERSION**: This is the free, limited version with hardcoded limits (2 workers, 24h TTL, 256MB Redis).  
+> 🚀 **Want more?** Check out [YouTube Downloader API Pro](https://github.com/alexbic/youtube-downloader-api-pro) - PostgreSQL storage, configurable TTL, processing results cache, and more!
+
 **English** | [Русский](README.ru.md)
 
 ---
