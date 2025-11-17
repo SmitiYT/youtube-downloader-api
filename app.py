@@ -942,7 +942,9 @@ def _background_download(
 ):
     def _post_webhook(payload: dict):
         if not webhook_url:
+            logger.warning(f"[{task_id[:8]}] Webhook skipped: no webhook_url provided")
             return
+        logger.info(f"[{task_id[:8]}] Sending webhook to {webhook_url}")
         headers = {"Content-Type": "application/json"}
         # Добавляем пользовательские заголовки, не позволяя переопределять Content-Type
         try:
@@ -956,16 +958,21 @@ def _background_download(
         attempts = max(1, WEBHOOK_RETRY_ATTEMPTS)
         for i in range(1, attempts + 1):
             try:
+                logger.debug(f"[{task_id[:8]}] Webhook attempt {i}/{attempts}")
                 resp = requests.post(webhook_url, headers=headers, data=body, timeout=WEBHOOK_TIMEOUT_SECONDS)
                 if 200 <= resp.status_code < 300:
+                    logger.info(f"[{task_id[:8]}] Webhook delivered successfully (HTTP {resp.status_code})")
                     return
+                logger.warning(f"[{task_id[:8]}] Webhook failed with HTTP {resp.status_code}")
                 # Неположительные коды считаем ошибкой доставки
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[{task_id[:8]}] Webhook attempt {i} failed: {e}")
                 # сетевые/таймаут ошибки — пробуем снова
                 pass
             if i < attempts:
                 time.sleep(max(0.0, WEBHOOK_RETRY_INTERVAL_SECONDS))
         # Все попытки исчерпаны — продолжаем без падения
+        logger.error(f"[{task_id[:8]}] Webhook delivery failed after {attempts} attempts")
 
     try:
         update_task(task_id, {"status": "downloading"})
