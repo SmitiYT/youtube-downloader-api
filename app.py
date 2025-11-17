@@ -981,7 +981,12 @@ def _background_download(
                 if 200 <= resp.status_code < 300:
                     logger.info(f"[{task_id[:8]}] Webhook delivered successfully (HTTP {resp.status_code})")
                     return
-                logger.warning(f"[{task_id[:8]}] Webhook failed with HTTP {resp.status_code}")
+                # Логируем тело ответа (усечённое) для упрощения диагностики в n8n
+                resp_preview = (resp.text or "")[:500]
+                if resp_preview:
+                    logger.warning(f"[{task_id[:8]}] Webhook failed with HTTP {resp.status_code}; body: {resp_preview}")
+                else:
+                    logger.warning(f"[{task_id[:8]}] Webhook failed with HTTP {resp.status_code} (empty body)")
                 # Неположительные коды считаем ошибкой доставки
             except Exception as e:
                 logger.warning(f"[{task_id[:8]}] Webhook attempt {i} failed: {e}")
