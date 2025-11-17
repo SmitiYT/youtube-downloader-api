@@ -612,7 +612,14 @@ def _try_send_webhook_once(url: str, payload: dict, task_id: str) -> bool:
     except Exception:
         pass
     try:
-        resp = requests.post(url, headers=headers, data=json.dumps(payload, ensure_ascii=False), timeout=WEBHOOK_TIMEOUT_SECONDS)
+        # Отправляем корректный JSON-тело через параметр json=
+        if logger.isEnabledFor(logging.DEBUG):
+            try:
+                preview = json.dumps(payload, ensure_ascii=False)[:300]
+                logger.debug(f"[{task_id[:8]}] Webhook payload preview: {preview}")
+            except Exception:
+                pass
+        resp = requests.post(url, headers=headers, json=payload, timeout=WEBHOOK_TIMEOUT_SECONDS)
         if 200 <= resp.status_code < 300:
             logger.info(f"[{task_id[:8]}] Webhook re-delivered successfully (HTTP {resp.status_code})")
             return True
@@ -1231,7 +1238,14 @@ def _background_download(
                 headers[k] = v
         except Exception:
             pass
-        body = json.dumps(payload, ensure_ascii=False)
+        # Лёгкая диагностика тела запроса под DEBUG
+        if logger.isEnabledFor(logging.DEBUG):
+            try:
+                body_preview = json.dumps(payload, ensure_ascii=False)
+                logger.debug(f"[{task_id[:8]}] webhook payload size={len(body_preview)}")
+                logger.debug(f"[{task_id[:8]}] webhook payload preview={body_preview[:400]}")
+            except Exception:
+                pass
         # Инициализируем/обновляем файл состояния вебхука
         st = load_webhook_state(task_id) or {}
         st.update({
@@ -1246,7 +1260,8 @@ def _background_download(
             try:
                 if i > 1:
                     logger.debug(f"[{task_id[:8]}] Webhook retry {i}/{attempts}")
-                resp = requests.post(webhook_url, headers=headers, data=body, timeout=WEBHOOK_TIMEOUT_SECONDS)
+                # Используем json= для корректного формирования тела и заголовков
+                resp = requests.post(webhook_url, headers=headers, json=payload, timeout=WEBHOOK_TIMEOUT_SECONDS)
                 if 200 <= resp.status_code < 300:
                     logger.info(f"[{task_id[:8]}] Webhook delivered")
                     logger.debug(f"[{task_id[:8]}] HTTP {resp.status_code}")
