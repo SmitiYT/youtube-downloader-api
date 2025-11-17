@@ -2,10 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Устанавливаем системные зависимости
+# Устанавливаем системные зависимости + Redis для встроенного кеша
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    redis-server \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # Устанавливаем Python зависимости
@@ -18,8 +20,28 @@ COPY . .
 # Создаем папку для загрузок
 RUN mkdir -p /app/downloads
 
+# Supervisor конфиг для Redis + Gunicorn
+RUN echo '[supervisord]' > /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'nodaemon=true' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo '[program:redis]' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'command=redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'autostart=true' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'autorestart=true' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stdout_logfile=/dev/stdout' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stdout_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stderr_logfile=/dev/stderr' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo '[program:gunicorn]' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'command=gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 600 app:app' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'directory=/app' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'autostart=true' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'autorestart=true' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stdout_logfile=/dev/stdout' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stdout_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stderr_logfile=/dev/stderr' >> /etc/supervisor/conf.d/supervisord.conf && \
+    echo 'stderr_logfile_maxbytes=0' >> /etc/supervisor/conf.d/supervisord.conf
+
 EXPOSE 5000
 
-# Настройка воркеров/таймаутов через переменные окружения
-# WORKERS (default: 1), GUNICORN_TIMEOUT (default: 300)
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:5000 --workers ${WORKERS:-1} --timeout ${GUNICORN_TIMEOUT:-300} app:app"]
+# Запускаем supervisor (Redis + Gunicorn с фиксированными лимитами)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

@@ -330,14 +330,15 @@ def save_task_metadata(task_id: str, metadata: Any):
 # ============================================
 # TASK STORAGE (Redis or Memory)
 # ============================================
+# Public version: Built-in Redis (localhost), not configurable
 STORAGE_MODE = "memory"
 tasks_store: Dict[str, Dict[str, Any]] = {}
 redis_client = None
-REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-REDIS_DB = int(os.getenv('REDIS_DB', 0))
-REDIS_INIT_RETRIES = int(os.getenv('REDIS_INIT_RETRIES', 10))
-REDIS_INIT_DELAY_SECONDS = float(os.getenv('REDIS_INIT_DELAY_SECONDS', 1))
+REDIS_HOST = 'localhost'  # Built-in Redis
+REDIS_PORT = 6379
+REDIS_DB = 0
+REDIS_INIT_RETRIES = 20  # More retries for built-in Redis startup
+REDIS_INIT_DELAY_SECONDS = 0.5
 
 def _ensure_redis() -> bool:
     """Пытается (пере)инициализировать Redis-клиент. Возвращает True при успехе."""

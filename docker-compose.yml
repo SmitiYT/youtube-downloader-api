@@ -1,12 +1,9 @@
 version: '3.8'
 
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
+# Public Version: Standalone container with built-in Redis
+# Fixed limits: 2 workers, 24h TTL, 256MB Redis memory
 
+services:
   youtube-downloader:
     image: alexbic/youtube-downloader-api:latest
     # или используйте GitHub Container Registry:
@@ -27,22 +24,16 @@ services:
       # Generate secure key: openssl rand -hex 32
       API_KEY: ${API_KEY}
 
-      # Redis configuration (enable multi-worker mode)
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0  # По умолчанию DB 0; если делите Redis с видеопроцессором — смените на 1
-
-      # Gunicorn workers / timeout
-      WORKERS: 2  # Can use 2+ workers with Redis
-      GUNICORN_TIMEOUT: 600
-
-      # Cleanup TTL (0 = disabled, default: 3600 seconds = 1 hour)
-      CLEANUP_TTL_SECONDS: 3600
+      # ⚠️ PUBLIC VERSION - HARDCODED LIMITS (not configurable):
+      # - Workers: 2 (fixed)
+      # - TTL: 24 hours (fixed)
+      # - Redis: Built-in, 256MB memory limit
+      # For flexible configuration, use Pro version
 
       # client_meta limits
       MAX_CLIENT_META_BYTES: 16384
       MAX_CLIENT_META_DEPTH: 5
       MAX_CLIENT_META_KEYS: 200
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     restart: unless-stopped
-    depends_on:
-      - redis

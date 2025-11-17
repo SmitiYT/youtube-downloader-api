@@ -30,7 +30,13 @@
 
 ## Quick Start
 
-### From Docker Hub
+### From Docker Hub (Public Version)
+
+**Public version features:**
+- ✅ Standalone container with built-in Redis
+- ✅ Fixed limits: 2 workers, 24h TTL, 256MB Redis
+- ✅ No external dependencies
+- ⚠️ Not configurable (for flexible setup, use Pro version)
 
 ```bash
 docker pull alexbic/youtube-downloader-api:latest
