@@ -8,19 +8,9 @@ services:
       # Локальная сборка: выключаем публичный режим, чтобы не требовать API_KEY
       PUBLIC_BASE_URL: ""
       API_KEY: ""
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      WORKERS: 2
-      GUNICORN_TIMEOUT: 600
-      CLEANUP_TTL_SECONDS: 3600
-      REDIS_INIT_RETRIES: 20
-      REDIS_INIT_DELAY_SECONDS: 0.5
       # Webhook defaults for local testing
       DEFAULT_WEBHOOK_URL: "http://webhook:9001/webhook"
       WEBHOOK_HEADERS: '{"Authorization": "Bearer local-test-token", "X-Source": "ytdl"}'
-      # Фоновые ретраи вебхуков: интервал сканирования (сек)
-      WEBHOOK_BACKGROUND_INTERVAL_SECONDS: 900
       # Logging
       LOG_LEVEL: "INFO"
     ports:

@@ -41,8 +41,8 @@ WEBHOOK_RETRY_ATTEMPTS = int(os.getenv('WEBHOOK_RETRY_ATTEMPTS', 3))
 WEBHOOK_RETRY_INTERVAL_SECONDS = float(os.getenv('WEBHOOK_RETRY_INTERVAL_SECONDS', 5))
 WEBHOOK_TIMEOUT_SECONDS = float(os.getenv('WEBHOOK_TIMEOUT_SECONDS', 8))
 # Периодические фоновые ретраи вебхуков (переживают рестарты, пока живёт задача)
-# Увеличили дефолтный интервал для снижения частоты сканирования (по умолчанию 15 минут)
-WEBHOOK_BACKGROUND_INTERVAL_SECONDS = float(os.getenv('WEBHOOK_BACKGROUND_INTERVAL_SECONDS', 900))
+# Публичная версия: фиксированный интервал, переменные окружения игнорируются
+WEBHOOK_BACKGROUND_INTERVAL_SECONDS = 900.0
 DEFAULT_WEBHOOK_URL = os.getenv('DEFAULT_WEBHOOK_URL')
 _WEBHOOK_HEADERS_ENV = os.getenv('WEBHOOK_HEADERS')
 
@@ -138,6 +138,12 @@ def log_startup_info():
         else:
             logger.info(f"Cleanup: TTL={CLEANUP_TTL_SECONDS}s ({CLEANUP_TTL_SECONDS//60}min)")
     logger.info(f"Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
+    logger.info(f"Resender: scan_interval={int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s (fixed in public version)")
+    try:
+        if os.getenv('WEBHOOK_BACKGROUND_INTERVAL_SECONDS') is not None:
+            logger.warning("Public version: WEBHOOK_BACKGROUND_INTERVAL_SECONDS env is ignored; using fixed value")
+    except Exception:
+        pass
     if DEFAULT_WEBHOOK_URL:
         logger.info(f"Webhook: default_url set -> {DEFAULT_WEBHOOK_URL}")
     if WEBHOOK_HEADERS:
