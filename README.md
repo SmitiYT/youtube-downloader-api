@@ -346,7 +346,7 @@ Content-Type: application/json
 | `REDIS_INIT_RETRIES` | `10` | Max retries for Redis connection on startup. |
 | `REDIS_INIT_DELAY_SECONDS` | `1` | Delay between Redis connection retries (seconds). |
 | **Task Management** |||
-| `CLEANUP_TTL_SECONDS` | `86400` | TTL for task files in /app/tasks (0 = disabled). Default: 24 hours. |
+| ~~`CLEANUP_TTL_SECONDS`~~ | `86400` | ❌ **Not configurable** in public version. Fixed at 24 hours. |
 | **Webhook Configuration** |||
 | `WEBHOOK_RETRY_ATTEMPTS` | `3` | Max webhook delivery attempts. |
 | `WEBHOOK_RETRY_INTERVAL_SECONDS` | `5` | Delay between webhook retries (seconds). |

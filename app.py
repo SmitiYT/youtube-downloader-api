@@ -28,8 +28,8 @@ PROGRESS_STEP = int(os.getenv('PROGRESS_STEP', 10))  # шаг, % для compact 
 LOG_YTDLP_OPTS = os.getenv('LOG_YTDLP_OPTS', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
 LOG_YTDLP_WARNINGS = os.getenv('LOG_YTDLP_WARNINGS', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
 
-# Cleanup TTL (0 = disabled, default: 86400 seconds = 24 hours)
-CLEANUP_TTL_SECONDS = int(os.getenv('CLEANUP_TTL_SECONDS', 86400))
+# Cleanup TTL (hardcoded: 86400 seconds = 24 hours, not configurable in public version)
+CLEANUP_TTL_SECONDS = 86400
 
 # Webhook delivery config
 WEBHOOK_RETRY_ATTEMPTS = int(os.getenv('WEBHOOK_RETRY_ATTEMPTS', 3))
