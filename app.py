@@ -18,7 +18,11 @@ try:
     _log_level = getattr(logging, LOG_LEVEL, logging.INFO)
 except Exception:
     _log_level = logging.INFO
-logging.basicConfig(level=_log_level)
+logging.basicConfig(
+    level=_log_level,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger("yt-dlp-api")
 
 # Управление логированием прогресса скачивания
@@ -727,8 +731,18 @@ def _webhook_resender_loop():
             logger.error(f"Resender: main loop exception: {e}")
         time.sleep(max(1.0, WEBHOOK_BACKGROUND_INTERVAL_SECONDS))
 
-_resender_thread = threading.Thread(target=_webhook_resender_loop, name='webhook-resender', daemon=True)
-_resender_thread.start()
+
+# Запускаем resender только в первом gunicorn worker
+marker_file = '/tmp/ytdlp_resender_started'
+try:
+    if not os.path.exists(marker_file):
+        with open(marker_file, 'w') as f:
+            f.write(str(os.getpid()))
+        _resender_thread = threading.Thread(target=_webhook_resender_loop, name='webhook-resender', daemon=True)
+        _resender_thread.start()
+        logger.debug(f"Resender thread started in process {os.getpid()}")
+except Exception as e:
+    logger.warning(f"Failed to start resender thread: {e}")
 
 # ============================================
 # CLEANUP
