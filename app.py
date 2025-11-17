@@ -624,35 +624,59 @@ def _try_send_webhook_once(url: str, payload: dict, task_id: str) -> bool:
 
 def _webhook_resender_loop():
     logger.info(f"Webhook resender: started; interval={WEBHOOK_BACKGROUND_INTERVAL_SECONDS}s")
+    first_scan = True
     while True:
         try:
             now = datetime.now()
-            for task_id in os.listdir(TASKS_DIR):
+            task_dirs = []
+            try:
+                task_dirs = [d for d in os.listdir(TASKS_DIR) if os.path.isdir(os.path.join(TASKS_DIR, d))]
+            except Exception as e:
+                logger.error(f"Resender: failed to list tasks directory: {e}")
+                time.sleep(max(1.0, WEBHOOK_BACKGROUND_INTERVAL_SECONDS))
+                continue
+            
+            if first_scan and task_dirs:
+                logger.info(f"Resender: scanning {len(task_dirs)} existing task(s)")
+                first_scan = False
+            
+            for task_id in task_dirs:
                 tdir = os.path.join(TASKS_DIR, task_id)
-                if not os.path.isdir(tdir):
-                    continue
-                # Инициализируем состояние и метаданные
-                st = load_webhook_state(task_id) or {}
-                if not st.get('status'):
-                    st['status'] = 'pending'
-                    st['attempts'] = 0
-                    save_webhook_state(task_id, st)
-                if st.get('status') == 'delivered':
-                    continue
-                meta = _load_metadata_for_payload(task_id)
-                # URL вебхука: сперва из состояния, затем из метаданных (webhook_url), затем дефолт
-                url = st.get('url') or (meta.get('webhook_url') if isinstance(meta, dict) else None) or DEFAULT_WEBHOOK_URL
-                if not url:
-                    continue
-                next_retry = st.get('next_retry')
-                if next_retry:
-                    try:
-                        if now < datetime.fromisoformat(next_retry):
-                            continue
-                    except Exception:
-                        pass
-                if not meta:
-                    continue
+                try:
+                    # Инициализируем состояние и метаданные
+                    st = load_webhook_state(task_id) or {}
+                    if not st.get('status'):
+                        logger.info(f"[{task_id[:8]}] Resender: found task without webhook state, initializing")
+                        st['status'] = 'pending'
+                        st['attempts'] = 0
+                        save_webhook_state(task_id, st)
+                    
+                    if st.get('status') == 'delivered':
+                        logger.debug(f"[{task_id[:8]}] Resender: skipping (already delivered)")
+                        continue
+                    
+                    meta = _load_metadata_for_payload(task_id)
+                    if not meta:
+                        logger.debug(f"[{task_id[:8]}] Resender: skipping (no metadata)")
+                        continue
+                    
+                    # URL вебхука: сперва из состояния, затем из метаданных (webhook_url), затем дефолт
+                    url = st.get('url') or (meta.get('webhook_url') if isinstance(meta, dict) else None) or DEFAULT_WEBHOOK_URL
+                    if not url:
+                        logger.debug(f"[{task_id[:8]}] Resender: skipping (no webhook URL)")
+                        continue
+                    
+                    next_retry = st.get('next_retry')
+                    if next_retry:
+                        try:
+                            next_retry_dt = datetime.fromisoformat(next_retry)
+                            if now < next_retry_dt:
+                                logger.debug(f"[{task_id[:8]}] Resender: skipping (next retry at {next_retry})")
+                                continue
+                        except Exception:
+                            pass
+                    
+                    logger.info(f"[{task_id[:8]}] Resender: attempting webhook delivery (attempt #{int(st.get('attempts') or 0) + 1})")
                 payload = {
                     'task_id': meta.get('task_id', task_id),
                     'status': meta.get('status', 'completed'),
@@ -670,26 +694,28 @@ def _webhook_resender_loop():
                 for k in ('task_download_url', 'metadata_url', 'task_download_url_internal', 'metadata_url_internal', 'client_meta', 'operation', 'error_type', 'error_message', 'user_action', 'raw_error', 'failed_at'):
                     if k in meta:
                         payload[k] = meta[k]
-                ok = _try_send_webhook_once(url, payload, task_id)
-                if ok:
-                    st.update({
-                        'status': 'delivered',
-                        'last_attempt': datetime.now().isoformat(),
-                        'attempts': int(st.get('attempts') or 0) + 1,
-                        'last_status': 200,
-                        'last_error': None,
-                        'next_retry': None,
-                    })
-                else:
-                    st.update({
-                        'status': 'pending',
-                        'last_attempt': datetime.now().isoformat(),
-                        'attempts': int(st.get('attempts') or 0) + 1,
-                        'next_retry': (datetime.now() + timedelta(seconds=WEBHOOK_BACKGROUND_INTERVAL_SECONDS)).isoformat(),
-                    })
-                save_webhook_state(task_id, st)
-        except Exception:
-            pass
+                    ok = _try_send_webhook_once(url, payload, task_id)
+                    if ok:
+                        st.update({
+                            'status': 'delivered',
+                            'last_attempt': datetime.now().isoformat(),
+                            'attempts': int(st.get('attempts') or 0) + 1,
+                            'last_status': 200,
+                            'last_error': None,
+                            'next_retry': None,
+                        })
+                    else:
+                        st.update({
+                            'status': 'pending',
+                            'last_attempt': datetime.now().isoformat(),
+                            'attempts': int(st.get('attempts') or 0) + 1,
+                            'next_retry': (datetime.now() + timedelta(seconds=WEBHOOK_BACKGROUND_INTERVAL_SECONDS)).isoformat(),
+                        })
+                    save_webhook_state(task_id, st)
+                except Exception as e:
+                    logger.error(f"[{task_id[:8]}] Resender: exception processing task: {e}")
+        except Exception as e:
+            logger.error(f"Resender: main loop exception: {e}")
         time.sleep(max(1.0, WEBHOOK_BACKGROUND_INTERVAL_SECONDS))
 
 _resender_thread = threading.Thread(target=_webhook_resender_loop, name='webhook-resender', daemon=True)
