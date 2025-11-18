@@ -781,8 +781,12 @@ except Exception as e:
 def cleanup_old_files() -> int:
     """
     Удаляет задачи старше TTL секунд.
+
     Использует created_at из metadata.json для проверки возраста задачи,
     чтобы избежать проблем с обновлением mtime директории при рестарте контейнера.
+
+    Orphaned tasks (без metadata.json) удаляются агрессивнее - через 1 час,
+    так как нормальные задачи всегда имеют metadata.json с момента создания.
     """
     if CLEANUP_TTL_SECONDS == 0:
         return 0  # cleanup disabled
@@ -803,6 +807,7 @@ def cleanup_old_files() -> int:
                 # Читаем created_at из metadata.json
                 metadata_path = os.path.join(tdir, 'metadata.json')
                 task_created_at = None
+                is_orphaned = False
 
                 if os.path.exists(metadata_path):
                     try:
@@ -822,16 +827,26 @@ def cleanup_old_files() -> int:
                                 task_created_at = created_dt.timestamp()
                     except Exception as e:
                         logger.debug(f"Cleanup: failed to parse metadata for {task_id}: {e}")
+                else:
+                    # Задача без metadata.json считается orphaned (зависшая/поврежденная)
+                    is_orphaned = True
 
                 # Если не удалось прочитать metadata, используем mtime как fallback
                 if task_created_at is None:
                     task_created_at = os.path.getmtime(tdir)
-                    logger.debug(f"Cleanup: using mtime fallback for {task_id}")
+                    if is_orphaned:
+                        logger.debug(f"Cleanup: orphaned task {task_id} (no metadata.json), using mtime")
 
                 # Проверяем возраст задачи
                 age_seconds = now - task_created_at
-                if age_seconds > ttl:
-                    logger.debug(f"Cleanup: removing task {task_id} (age: {age_seconds:.0f}s, ttl: {ttl}s)")
+
+                # Orphaned tasks (без metadata.json) удаляем агрессивнее - через 1 час
+                # Нормальные задачи имеют metadata.json с момента создания
+                effective_ttl = 3600 if is_orphaned else ttl  # 1 hour for orphaned, normal TTL for others
+
+                if age_seconds > effective_ttl:
+                    reason = "orphaned" if is_orphaned else "expired"
+                    logger.debug(f"Cleanup: removing {reason} task {task_id} (age: {age_seconds:.0f}s, ttl: {effective_ttl}s)")
                     shutil.rmtree(tdir, ignore_errors=True)
                     removed += 1
 
