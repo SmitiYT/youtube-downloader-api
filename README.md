@@ -885,10 +885,90 @@ MIT License - see [LICENSE](LICENSE) file
 
 ---
 
+## 🚀 YouTube Downloader API Pro
+
+**Coming Soon!** The Pro version is currently in development and will be available shortly.
+
+### What's Coming in Pro Version
+
+The Pro version will include:
+
+- 🗄️ **PostgreSQL Storage** - Persistent task history and metadata
+- ⚙️ **Fully Configurable** - Customize workers (1-10+), TTL (hours to months), external Redis
+- 📊 **Processing Results Cache** - Store and query yt-dlp output for analytics
+- 🔍 **Advanced Search & Filtering** - Query tasks by status, date range, client_meta fields
+- 📈 **Task Statistics** - Track success rate, processing time, bandwidth usage
+- 🔄 **Priority Queue** - VIP task processing with configurable priorities
+- 📧 **Email Notifications** - Task completion alerts
+- 👨‍💼 **Priority Support** - Direct email and GitHub support
+- 📚 **Extended Documentation** - Detailed guides and best practices
+
+### Distribution Model (In Development)
+
+We're currently evaluating the best way to deliver the Pro version:
+
+**Option 1: GitHub Private Repository (Subscription)**
+- Access via GitHub team/organization membership
+- Clone repository with your credentials
+- Automatic updates via git pull
+- Pro: Simple, familiar workflow for developers
+- Con: Requires GitHub account
+
+**Option 2: Docker Registry (License Key)**
+- Pull Pro image from private registry with license key
+- `docker pull pro.yourdomain.com/youtube-downloader-api-pro:latest`
+- License validation on startup
+- Pro: No source code exposure, easy deployment
+- Con: Requires license server infrastructure
+
+**Option 3: npm/PyPI Private Package**
+- Install via private package registry
+- `pip install --extra-index-url https://pypi.yourdomain.com youtube-downloader-api-pro`
+- Pro: Standard package management
+- Con: Additional infrastructure needed
+
+**Option 4: Landing Page with Direct Downloads**
+- Purchase on landing page → receive download link
+- Manual updates via re-download
+- Pro: Simple, no infrastructure
+- Con: Manual update process
+
+**Option 5: Hybrid Approach**
+- Landing page for purchase and license key generation
+- Private Docker registry for Pro images
+- GitHub private repo for enterprise customers
+- Pro: Flexible, caters to different customer needs
+- Con: More complex to maintain
+
+### Current Status
+
+🔨 **In Active Development**
+- Core Pro features are being implemented in `youtube-downloader-api-pro` repository
+- Testing deployment and licensing models
+- Preparing documentation and landing page
+
+📧 **Get Notified**
+Interested in the Pro version? Contact us to be notified when it launches:
+- Email: support@alexbic.net
+- GitHub: Watch the repository for announcements
+
+### Pricing (Preliminary)
+
+We're considering the following pricing tiers:
+
+- **Individual License**: $XX/month or $XXX/year - Single deployment
+- **Team License**: $XXX/month or $XXXX/year - Up to 5 deployments
+- **Enterprise License**: Custom pricing - Unlimited deployments + SLA
+
+*Pricing is subject to change before official launch*
+
+---
+
 ## Support
 
 - GitHub: [@alexbic](https://github.com/alexbic)
 - Issues: [GitHub Issues](https://github.com/alexbic/youtube-downloader-api/issues)
+- Pro Version Inquiries: support@alexbic.net
 
 ---
 
