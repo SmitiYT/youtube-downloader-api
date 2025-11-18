@@ -24,7 +24,9 @@ This is the **free, open-source version** optimized for standalone deployment wi
 - 🔁 **Background resender** - automatic retry of failed webhooks every 15 minutes
 - ⚙️ **Configurable retries** - 3 immediate attempts with 5-second intervals
 - 🎯 **Default webhook URL** - fallback for tasks without explicit webhook
-- 🔐 **Custom headers** - authentication support for webhook endpoints
+- 🔐 **Custom headers** - global and per-request authentication headers
+- 🎨 **Per-request webhook headers** - custom authentication for each webhook
+- 📊 **Webhook state in metadata** - unified tracking in single file
 
 #### Infrastructure
 - 🐳 **Docker ready** - single standalone container
@@ -133,6 +135,104 @@ Normal tasks always create `metadata.json` immediately. If it's missing after 1 
 Automatic cleanup of stuck downloads, preventing disk space issues.
 
 **Commit:** [9c8a7fa](https://github.com/alexbic/youtube-downloader-api/commit/9c8a7fa)
+
+---
+
+## 🆕 New Features
+
+### 1. File Expiration Tracking
+
+**Feature:** Added `expires_at` field to metadata.json
+
+Клиенты теперь точно знают когда файлы будут удалены.
+
+**Implementation:**
+```json
+{
+  "created_at": "2025-11-18T20:25:11.506604",
+  "completed_at": "2025-11-18T20:25:28.731338",
+  "expires_at": "2025-11-19T20:25:11.506604"
+}
+```
+
+**Benefits:**
+- ✅ Calculated as: `created_at + CLEANUP_TTL_SECONDS`
+- ✅ ISO 8601 timestamp format
+- ✅ `null` if TTL disabled (Pro version)
+- ✅ Helps clients plan downloads before expiration
+
+---
+
+### 2. Custom Webhook Headers
+
+**Feature:** Per-request authentication headers via `webhook_headers` parameter
+
+Каждый webhook может иметь свои собственные заголовки авторизации.
+
+**Request Example:**
+```json
+{
+  "url": "https://youtube.com/watch?v=...",
+  "async": true,
+  "webhook_url": "https://your-webhook.com/endpoint",
+  "webhook_headers": {
+    "X-API-Key": "secret-key-123",
+    "Authorization": "Bearer custom-token"
+  }
+}
+```
+
+**Use Cases:**
+- 🔑 Different API keys for different webhooks
+- 🎫 Request-specific authorization tokens
+- 🏷️ Custom tracing/correlation IDs
+- 👤 Client identification headers
+
+**Validation:**
+- ✅ Must be JSON object with string keys/values
+- ✅ Header name max: 256 characters
+- ✅ Header value max: 2048 characters
+- ✅ `Content-Type` cannot be overridden
+- ✅ Priority: `webhook_headers` > global `WEBHOOK_HEADERS`
+
+**Storage:**
+Headers are saved in `metadata.webhook.headers` and reused by webhook resender.
+
+---
+
+### 3. Unified Metadata Structure
+
+**Feature:** Webhook state merged into metadata.json
+
+**Before:** Two separate files
+- `metadata.json` - task info
+- `webhook.json` - webhook state
+
+**After:** Single `metadata.json` with `webhook` object
+```json
+{
+  "task_id": "...",
+  "status": "completed",
+  ...
+  "webhook": {
+    "url": "http://...",
+    "headers": {"X-API-Key": "..."},
+    "status": "delivered",
+    "attempts": 1,
+    "last_attempt": "2025-11-18T20:25:28.738988",
+    "last_status": 200,
+    "last_error": null,
+    "next_retry": null
+  }
+}
+```
+
+**Benefits:**
+- ✅ One file instead of two
+- ✅ Simpler for clients
+- ✅ Atomic updates
+- ✅ Less I/O operations
+- ✅ All task info in one place
 
 ---
 

@@ -26,6 +26,9 @@ This is the **free, open-source version** with fixed configuration optimized for
 - 🔄 **Sync and async modes** - immediate or background processing
 - 🔗 **Webhook support** - POST notifications on task completion with automatic retries
 - 📝 **Client metadata** - pass arbitrary JSON through entire workflow
+- ⏰ **File expiration tracking** - `expires_at` field shows when files will be deleted
+- 🎯 **Custom webhook headers** - per-request authentication headers for webhooks
+- 📦 **Unified metadata** - all task info in single metadata.json file
 
 #### Public Version Specifics (Hardcoded)
 - 📦 **Embedded Redis** - 256MB memory limit, localhost:6379 (not configurable)
@@ -81,6 +84,84 @@ The following parameters are **HARDCODED** and **CANNOT be changed** in the publ
 - ✅ Prevents accumulation of broken/incomplete tasks
 
 **Impact:** Automatic cleanup of stuck downloads that failed to create metadata.
+
+---
+
+### 🆕 New Features
+
+#### File Expiration Tracking
+**Feature:** Added `expires_at` field to metadata.json
+
+**Benefits:**
+- ✅ Clients know exactly when files will be deleted
+- ✅ Calculated as: `created_at + CLEANUP_TTL_SECONDS`
+- ✅ ISO 8601 timestamp format (same as `created_at`)
+- ✅ `null` if TTL is disabled (Pro version only)
+
+**Example:**
+```json
+{
+  "created_at": "2025-11-18T20:25:11.506604",
+  "expires_at": "2025-11-19T20:25:11.506604"
+}
+```
+
+#### Custom Webhook Headers
+**Feature:** Per-request webhook authentication via `webhook_headers` parameter
+
+**Use Cases:**
+- 🔑 Different API keys for different webhooks
+- 🎫 Request-specific authorization tokens
+- 🏷️ Custom tracing/correlation IDs
+- 👤 Client identification headers
+
+**Example:**
+```json
+{
+  "url": "https://youtube.com/watch?v=...",
+  "async": true,
+  "webhook_url": "https://your-webhook.com/endpoint",
+  "webhook_headers": {
+    "X-API-Key": "secret-key-123",
+    "Authorization": "Bearer token-456"
+  }
+}
+```
+
+**Validation:**
+- ✅ Must be JSON object with string keys/values
+- ✅ Header name max: 256 chars
+- ✅ Header value max: 2048 chars
+- ✅ `Content-Type` cannot be overridden
+- ✅ Priority: per-request > global `WEBHOOK_HEADERS`
+
+#### Unified Metadata Structure
+**Feature:** Webhook state merged into metadata.json
+
+**Before:** Separate files (metadata.json + webhook.json)
+**After:** Single metadata.json with `webhook` object
+
+**Benefits:**
+- ✅ One file instead of two
+- ✅ Simpler for clients
+- ✅ Atomic updates
+- ✅ Less I/O operations
+
+**New webhook object structure:**
+```json
+{
+  "webhook": {
+    "url": "http://...",
+    "headers": {"X-API-Key": "..."},
+    "status": "delivered",
+    "attempts": 1,
+    "last_attempt": "2025-11-18T20:25:28.738988",
+    "last_status": 200,
+    "last_error": null,
+    "next_retry": null
+  }
+}
+```
 
 ---
 
