@@ -412,7 +412,7 @@ The public version includes a **background webhook resender service** that autom
 2. **Background retries**: Every 15 minutes until successful or TTL expires
 
 **Configuration:**
-- Use `DEFAULT_WEBHOOK_URL` to set fallback webhook for all async tasks without explicit `webhook_url`
+- Use `DEFAULT_WEBHOOK_URL` to set fallback webhook for all async tasks without explicit `webhook.url` in request
 - Use `WEBHOOK_HEADERS` to add authentication headers: `{"Authorization": "Bearer XXX"}`
 - Monitor webhook delivery in logs (set `LOG_LEVEL=DEBUG` for detailed webhook payload preview)
 
@@ -505,18 +505,18 @@ YouTube is gradually requiring "PO Token" for downloads. If cookies don't help:
 
 ## Webhook Support
 
-If `webhook_url` is provided in `POST /download_video`, the service POSTs to the URL on task completion.
+If `webhook.url` is provided in `POST /download_video`, the service POSTs to the URL on task completion.
 
 ### Default Webhook URL
 
-Set `DEFAULT_WEBHOOK_URL` to avoid specifying `webhook_url` in every async request:
+Set `DEFAULT_WEBHOOK_URL` to avoid specifying `webhook.url` in every async request:
 
 ```yaml
 environment:
   DEFAULT_WEBHOOK_URL: "https://hooks.internal/downloader"
 ```
 
-If the request body omits `webhook_url`, the fallback is used. If both are set, the explicit `webhook_url` in the request overrides the default.
+If the request body omits `webhook.url`, the fallback is used. If both are set, the explicit `webhook.url` in the request overrides the default.
 
 Validation rules:
 - Must start with `http://` or `https://`
@@ -550,17 +550,19 @@ Security & Observability:
 
 ### Per-Request Webhook Headers
 
-You can specify custom headers for a specific webhook using the `webhook_headers` parameter in the request body. These headers override global `WEBHOOK_HEADERS` for that specific webhook.
+You can specify custom headers for a specific webhook using the `webhook.headers` field in the request body. These headers override global `WEBHOOK_HEADERS` for that specific webhook.
 
 ```json
 {
   "url": "https://youtube.com/watch?v=...",
   "async": true,
-  "webhook_url": "https://your-webhook.com/endpoint",
-  "webhook_headers": {
-    "X-API-Key": "your-secret-key",
-    "Authorization": "Bearer token123",
-    "X-Custom-Header": "custom-value"
+  "webhook": {
+    "url": "https://your-webhook.com/endpoint",
+    "headers": {
+      "X-API-Key": "your-secret-key",
+      "Authorization": "Bearer token123",
+      "X-Custom-Header": "custom-value"
+    }
   }
 }
 ```

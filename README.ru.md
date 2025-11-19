@@ -425,17 +425,19 @@ API автоматически вернёт абсолютные URL. Для в�
 
 #### Кастомные заголовки для webhook
 
-Вы можете указать пользовательские заголовки для конкретного webhook используя параметр `webhook_headers` в теле запроса. Эти заголовки переопределяют глобальные `WEBHOOK_HEADERS` для данного webhook.
+Вы можете указать пользовательские заголовки для конкретного webhook используя поле `webhook.headers` в теле запроса. Эти заголовки переопределяют глобальные `WEBHOOK_HEADERS` для данного webhook.
 
 ```json
 {
   "url": "https://youtube.com/watch?v=...",
   "async": true,
-  "webhook_url": "https://your-webhook.com/endpoint",
-  "webhook_headers": {
-    "X-API-Key": "your-secret-key",
-    "Authorization": "Bearer token123",
-    "X-Custom-Header": "custom-value"
+  "webhook": {
+    "url": "https://your-webhook.com/endpoint",
+    "headers": {
+      "X-API-Key": "your-secret-key",
+      "Authorization": "Bearer token123",
+      "X-Custom-Header": "custom-value"
+    }
   }
 }
 ```
