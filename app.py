@@ -217,6 +217,45 @@ def require_api_key(f):
 # ============================================
 # URL HELPERS
 # ============================================
+def is_youtube_url(url: str) -> bool:
+    """
+    Validates that the URL is a YouTube URL.
+    Accepts:
+    - youtube.com (www.youtube.com, m.youtube.com, music.youtube.com)
+    - youtu.be short URLs
+
+    Security: Prevents downloading from arbitrary URLs.
+    """
+    if not url or not isinstance(url, str):
+        return False
+
+    url_lower = url.lower().strip()
+
+    # Must start with http:// or https://
+    if not url_lower.startswith(('http://', 'https://')):
+        return False
+
+    # Extract domain from URL
+    try:
+        # Remove protocol
+        without_protocol = url_lower.split('://', 1)[1] if '://' in url_lower else url_lower
+        # Get domain (before first / or ?)
+        domain = without_protocol.split('/')[0].split('?')[0]
+
+        # Valid YouTube domains
+        valid_domains = (
+            'youtube.com',
+            'www.youtube.com',
+            'm.youtube.com',
+            'music.youtube.com',
+            'youtu.be',
+            'www.youtu.be'
+        )
+
+        return domain in valid_domains
+    except Exception:
+        return False
+
 def _join_url(base: str, path: str) -> str:
     if not base:
         return path
@@ -1132,6 +1171,10 @@ def download_video():
             return jsonify({"error": f"Invalid client_meta: {err}"}), 400
         if not video_url:
             return jsonify({"error": "URL is required"}), 400
+
+        # Security: Validate that URL is from YouTube only
+        if not is_youtube_url(video_url):
+            return jsonify({"error": "Invalid URL: Only YouTube URLs are allowed (youtube.com, youtu.be)"}), 400
 
         # Async mode: start background task and return immediately
         if bool(data.get('async', False)):
