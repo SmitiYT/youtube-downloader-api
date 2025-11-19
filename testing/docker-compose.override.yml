@@ -1,31 +1,7 @@
-version: '3.8'
-
 services:
   youtube-downloader:
-    build: .
-    image: youtube-downloader-api:local
-    environment:
-      # Локальная сборка: выключаем публичный режим, чтобы не требовать API_KEY
-      PUBLIC_BASE_URL: ""
-      API_KEY: ""
-      # Webhook defaults for local testing
-      DEFAULT_WEBHOOK_URL: "http://webhook:9001/webhook"
-      WEBHOOK_HEADERS: '{"Authorization": "Bearer local-test-token", "X-Source": "ytdl"}'
-      # Logging
-      LOG_LEVEL: "INFO"
-    ports:
-      - "5002:5000"
-    volumes:
-      - ./testing/tasks:/app/tasks
-      # При необходимости раскомментируйте файл cookies
-      # - ./cookies.txt:/app/cookies.txt
-
-  webhook:
-    image: python:3.11-slim
-    environment:
-      - PORT=9001
-    command: ["python", "/app/webhook_server.py"]
-    ports:
-      - "9001:9001"
-    volumes:
-      - ./testing/tools:/app:ro
+    # Для локального тестирования: собираем из исходников
+    build:
+      context: /Users/bic/dev/youtube-downloader-api
+      dockerfile: Dockerfile
+    image: youtube-downloader-api-local:test
