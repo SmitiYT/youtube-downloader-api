@@ -133,7 +133,12 @@ Content-Type: application/json
   "url": "https://www.youtube.com/watch?v=VIDEO_ID",
   "async": true,
   "quality": "best[height<=720]",
-  "webhook_url": "https://your-webhook.com/callback",
+  "webhook": {
+    "url": "https://your-webhook.com/callback",
+    "headers": {
+      "X-API-Key": "your-secret-key"
+    }
+  },
   "client_meta": {"user_id": 123, "project": "demo"}
 }
 ```
@@ -155,7 +160,9 @@ Content-Type: application/json
   - `best[height<=720]` - 720p
   - `best[height<=1080]` - 1080p
   - `best` - maximum quality
-- `webhook_url` (optional, string) - webhook callback URL (async mode)
+- `webhook` (optional, object) - webhook configuration (async mode only)
+  - `url` (required, string) - webhook callback URL
+  - `headers` (optional, object) - custom headers for webhook authentication
 - `client_meta` (optional, object) - arbitrary JSON metadata (max 16KB)
 - `cookiesFromBrowser` (optional, string) - browser to extract cookies from (chrome/firefox/safari/edge, local only)
 
@@ -349,8 +356,8 @@ Content-Type: application/json
 | `WEBHOOK_RETRY_INTERVAL_SECONDS` | `5` | Delay between immediate webhook retries (seconds). |
 | `WEBHOOK_TIMEOUT_SECONDS` | `8` | Webhook request timeout (seconds). |
 | ~~`WEBHOOK_BACKGROUND_INTERVAL_SECONDS`~~ | `900` | ❌ **Not configurable** in public version. Background resender scans every 15 minutes (fixed). |
-| `DEFAULT_WEBHOOK_URL` | — | Fallback webhook URL (async). Used when request has no `webhook_url`. Must start with http(s)://, < 2048 chars. |
-| `WEBHOOK_HEADERS` | — | Extra headers for webhook POST. JSON object or list: `{"Authorization":"Bearer XXX","X-Source":"ytdl"}` OR `Authorization: Bearer XXX; X-Source: ytdl`. Sensitive headers (Authorization, X-API-Key, X-Auth-Token) masked in startup logs. |
+| `WEBHOOK_HEADERS` | — | Global webhook headers (JSON string). Example: `{"X-API-Key": "key"}`. Optional. Per-request headers override these. Sensitive headers masked in logs. |
+| `DEFAULT_WEBHOOK_URL` | — | Fallback webhook URL (async). Used when request has no `webhook` object. Must start with http(s)://, < 2048 chars. |
 | **Logging** |||
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
 | `PROGRESS_LOG` | `off` | yt-dlp progress logging (off, compact, full). |

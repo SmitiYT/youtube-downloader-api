@@ -106,8 +106,14 @@ The following parameters are **HARDCODED** and **CANNOT be changed** in the publ
 }
 ```
 
-#### Custom Webhook Headers
-**Feature:** Per-request webhook authentication via `webhook_headers` parameter
+#### Unified Webhook Object Format
+**Feature:** New webhook object structure with `url` and `headers` fields
+
+**Breaking Change:** Old formats are no longer supported:
+- ❌ `webhook_url` (deprecated)
+- ❌ `webhook_headers` (deprecated)
+- ❌ `callback_url` (deprecated)
+- ✅ Use `webhook: {"url": "...", "headers": {...}}` instead
 
 **Use Cases:**
 - 🔑 Different API keys for different webhooks
@@ -120,20 +126,25 @@ The following parameters are **HARDCODED** and **CANNOT be changed** in the publ
 {
   "url": "https://youtube.com/watch?v=...",
   "async": true,
-  "webhook_url": "https://your-webhook.com/endpoint",
-  "webhook_headers": {
-    "X-API-Key": "secret-key-123",
-    "Authorization": "Bearer token-456"
+  "webhook": {
+    "url": "https://your-webhook.com/endpoint",
+    "headers": {
+      "X-API-Key": "secret-key-123",
+      "Authorization": "Bearer token-456"
+    }
   }
 }
 ```
 
 **Validation:**
-- ✅ Must be JSON object with string keys/values
+- ✅ `webhook` must be an object (not a string)
+- ✅ `webhook.url` must start with http(s)://
+- ✅ `webhook.url` max: 2048 chars
+- ✅ `webhook.headers` must be an object with string keys/values
 - ✅ Header name max: 256 chars
 - ✅ Header value max: 2048 chars
 - ✅ `Content-Type` cannot be overridden
-- ✅ Priority: per-request > global `WEBHOOK_HEADERS`
+- ✅ Priority: per-request `webhook.headers` > global `WEBHOOK_HEADERS`
 
 #### Unified Metadata Structure
 **Feature:** Webhook state merged into metadata.json
