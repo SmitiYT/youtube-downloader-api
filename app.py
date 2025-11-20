@@ -111,20 +111,20 @@ def log_startup_info():
         logger.info("🚀 Upgrade to Pro: support@alexbic.net")
         logger.info("   ✓ Configurable parameters ✓ PostgreSQL ✓ /results endpoint")
         logger.info("=" * 60)
-        logger.info(f"Log level: {LOG_LEVEL} | yt-dlp: {get_yt_dlp_version()}")
+        logger.info(f"   Log level: {LOG_LEVEL} | yt-dlp: {get_yt_dlp_version()}")
         # Log API access mode
         if public_url and API_KEY:
-            logger.info(f"Mode: PUBLIC API | Base URL: {public_url}")
-            logger.info("Authentication: ENABLED")
+            logger.info(f"   Mode: PUBLIC API | Base URL: {public_url}")
+            logger.info("   Authentication: ENABLED")
         else:
-            logger.info("Mode: INTERNAL (Docker network)")
+            logger.info("   Mode: INTERNAL (Docker network)")
             if public_url and not API_KEY:
                 logger.warning("⚠️  PUBLIC_BASE_URL ignored (API_KEY not set)")
-            logger.info("Authentication: DISABLED")
+            logger.info("   Authentication: DISABLED")
         if 'TASKS_DIR' in globals():
-            logger.info(f"Tasks dir: {TASKS_DIR}")
+            logger.info(f"   Tasks dir: {TASKS_DIR}")
         if 'COOKIES_PATH' in globals() and os.path.exists(COOKIES_PATH):
-            logger.info(f"Cookies: available")
+            logger.info(f"   Cookies: available")
         logger.info("=" * 60)
     finally:
         # Возвращаем старый форматтер
