@@ -26,25 +26,24 @@ logging.basicConfig(
 logger = logging.getLogger("yt-dlp-api")
 
 # Управление логированием прогресса скачивания
-PROGRESS_LOG_MODE = os.getenv('PROGRESS_LOG', os.getenv('YTDLP_PROGRESS_LOG', 'off')).strip().lower()
-if PROGRESS_LOG_MODE not in ('off', 'compact', 'full'):
-    PROGRESS_LOG_MODE = 'off'
-PROGRESS_STEP = int(os.getenv('PROGRESS_STEP', 10))  # шаг, % для compact режима
-LOG_YTDLP_OPTS = os.getenv('LOG_YTDLP_OPTS', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
-LOG_YTDLP_WARNINGS = os.getenv('LOG_YTDLP_WARNINGS', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
+# Logging configuration (HARDCODED for public version)
+PROGRESS_LOG_MODE = 'off'  # os.getenv('PROGRESS_LOG', os.getenv('YTDLP_PROGRESS_LOG', 'off')).strip().lower()
+PROGRESS_STEP = 10  # int(os.getenv('PROGRESS_STEP', 10))  # шаг, % для compact режима
+LOG_YTDLP_OPTS = False  # os.getenv('LOG_YTDLP_OPTS', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
+LOG_YTDLP_WARNINGS = False  # os.getenv('LOG_YTDLP_WARNINGS', 'false').strip().lower() in ('1', 'true', 'yes', 'on')
 
 # Cleanup TTL (hardcoded: 86400 seconds = 24 hours, not configurable in public version)
 CLEANUP_TTL_SECONDS = 86400
 
-# Webhook delivery config
-WEBHOOK_RETRY_ATTEMPTS = int(os.getenv('WEBHOOK_RETRY_ATTEMPTS', 3))
-WEBHOOK_RETRY_INTERVAL_SECONDS = float(os.getenv('WEBHOOK_RETRY_INTERVAL_SECONDS', 5))
-WEBHOOK_TIMEOUT_SECONDS = float(os.getenv('WEBHOOK_TIMEOUT_SECONDS', 8))
+# Webhook delivery config (HARDCODED for public version)
+WEBHOOK_RETRY_ATTEMPTS = 3  # int(os.getenv('WEBHOOK_RETRY_ATTEMPTS', 3))
+WEBHOOK_RETRY_INTERVAL_SECONDS = 5.0  # float(os.getenv('WEBHOOK_RETRY_INTERVAL_SECONDS', 5))
+WEBHOOK_TIMEOUT_SECONDS = 8.0  # float(os.getenv('WEBHOOK_TIMEOUT_SECONDS', 8))
 # Периодические фоновые ретраи вебхуков (переживают рестарты, пока живёт задача)
 # Публичная версия: фиксированный интервал, переменные окружения игнорируются
 WEBHOOK_BACKGROUND_INTERVAL_SECONDS = 900.0
-DEFAULT_WEBHOOK_URL = os.getenv('DEFAULT_WEBHOOK_URL')
-_WEBHOOK_HEADERS_ENV = os.getenv('WEBHOOK_HEADERS')
+DEFAULT_WEBHOOK_URL = None  # os.getenv('DEFAULT_WEBHOOK_URL')
+_WEBHOOK_HEADERS_ENV = None  # os.getenv('WEBHOOK_HEADERS')
 
 def _parse_webhook_headers(raw: str | None) -> dict:
     if not raw:
@@ -92,21 +91,26 @@ def log_startup_info():
     logger.info("=" * 60)
     logger.info("YouTube Downloader API - PUBLIC VERSION")
     logger.info("=" * 60)
-    logger.warning("⚠️  PUBLIC VERSION - LIMITED FEATURES")
-    logger.warning("   • Workers: 2 (fixed)")
-    logger.warning("   • Task TTL: 24 hours (fixed)")
-    logger.warning("   • Redis: Built-in, 256MB limit")
-    logger.warning("   • No processing results cache")
+    logger.warning("⚠️  PUBLIC VERSION - HARDCODED PARAMETERS")
     logger.warning("")
-    logger.warning("🚀 Want more? Upgrade to PRO VERSION:")
-    logger.warning("   • Configurable TTL (up to months)")
-    logger.warning("   • PostgreSQL metadata storage")
-    logger.warning("   • /task/{id}/results endpoint")
-    logger.warning("   • Advanced search & filtering")
-    logger.warning("   • Priority support")
+    logger.warning("📋 HARDCODED CONFIGURATION:")
+    logger.warning("   Workers: 2 (fixed in Dockerfile)")
+    logger.warning(f"   Redis: {REDIS_HOST}:{REDIS_PORT} (embedded, 256MB, localhost only)")
+    logger.warning(f"   Task TTL: {CLEANUP_TTL_SECONDS}s (24 hours)")
+    logger.warning(f"   Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
+    logger.warning(f"   Resender: interval={int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s")
+    logger.warning(f"   Client Meta: max_bytes={MAX_CLIENT_META_BYTES}, depth={MAX_CLIENT_META_DEPTH}, keys={MAX_CLIENT_META_KEYS}")
+    logger.warning(f"   Progress Log: mode={PROGRESS_LOG_MODE}, step={PROGRESS_STEP}%")
     logger.warning("")
-    logger.warning("📧 Contact: support@alexbic.net")
-    logger.warning("🌐 Info: https://github.com/alexbic/youtube-downloader-api-pro")
+    logger.warning("🚀 WANT CONFIGURABLE PARAMETERS?")
+    logger.warning("   ✓ Adjustable workers (1-10+)")
+    logger.warning("   ✓ Variable TTL (hours to months)")
+    logger.warning("   ✓ PostgreSQL metadata storage")
+    logger.warning("   ✓ /task/{id}/results endpoint")
+    logger.warning("   ✓ Advanced search & filtering")
+    logger.warning("")
+    logger.warning("📧 Upgrade to Pro: support@alexbic.net")
+    logger.warning("🌐 GitHub: https://github.com/alexbic/youtube-downloader-api-pro")
     logger.info("=" * 60)
     logger.info(f"Auth: {'REQUIRED' if AUTH_REQUIRED else 'DISABLED'} (depends on PUBLIC_BASE_URL & API_KEY)")
     if public_url and API_KEY:
@@ -693,13 +697,13 @@ def update_task(task_id: str, updates: dict):
         save_task(task_id, t)
 
 # ============================================
-# client_meta VALIDATION (simplified)
+# client_meta VALIDATION (HARDCODED for public version)
 # ============================================
-MAX_CLIENT_META_BYTES = int(os.getenv('MAX_CLIENT_META_BYTES', 16 * 1024))
-MAX_CLIENT_META_DEPTH = int(os.getenv('MAX_CLIENT_META_DEPTH', 5))
-MAX_CLIENT_META_KEYS = int(os.getenv('MAX_CLIENT_META_KEYS', 200))
-MAX_CLIENT_META_STRING_LENGTH = int(os.getenv('MAX_CLIENT_META_STRING_LENGTH', 1000))
-MAX_CLIENT_META_LIST_LENGTH = int(os.getenv('MAX_CLIENT_META_LIST_LENGTH', 200))
+MAX_CLIENT_META_BYTES = 16 * 1024  # int(os.getenv('MAX_CLIENT_META_BYTES', 16 * 1024))
+MAX_CLIENT_META_DEPTH = 5  # int(os.getenv('MAX_CLIENT_META_DEPTH', 5))
+MAX_CLIENT_META_KEYS = 200  # int(os.getenv('MAX_CLIENT_META_KEYS', 200))
+MAX_CLIENT_META_STRING_LENGTH = 1000  # int(os.getenv('MAX_CLIENT_META_STRING_LENGTH', 1000))
+MAX_CLIENT_META_LIST_LENGTH = 200  # int(os.getenv('MAX_CLIENT_META_LIST_LENGTH', 200))
 ALLOWED_JSON_PRIMITIVES = (str, int, float, bool, type(None))
 
 def _validate_meta_structure(node, depth=0, counters=None):
@@ -1109,9 +1113,62 @@ def cleanup_old_files() -> int:
 def health_check():
     return jsonify({
         "status": "healthy",
+        "service": "youtube-downloader-api",
+        "version": "public",
         "timestamp": datetime.now().isoformat(),
         "auth": "enabled" if AUTH_REQUIRED else "disabled",
-        "storage": STORAGE_MODE
+        "storage": STORAGE_MODE,
+        
+        # Hardcoded configuration (Public Version)
+        # Upgrade to Pro for configurable parameters via environment variables
+        "config": {
+            "workers": 2,  # Hardcoded in Dockerfile
+            "redis": {
+                "host": REDIS_HOST,
+                "port": REDIS_PORT,
+                "db": REDIS_DB,
+                "maxmemory": "256MB",
+                "embedded": True
+            },
+            "limits": {
+                "task_ttl_seconds": CLEANUP_TTL_SECONDS,
+                "max_client_meta_bytes": MAX_CLIENT_META_BYTES,
+                "max_client_meta_depth": MAX_CLIENT_META_DEPTH,
+                "max_client_meta_keys": MAX_CLIENT_META_KEYS,
+                "max_client_meta_string_length": MAX_CLIENT_META_STRING_LENGTH,
+                "max_client_meta_list_length": MAX_CLIENT_META_LIST_LENGTH
+            },
+            "logging": {
+                "progress_mode": PROGRESS_LOG_MODE,
+                "progress_step": PROGRESS_STEP,
+                "ytdlp_opts": LOG_YTDLP_OPTS,
+                "ytdlp_warnings": LOG_YTDLP_WARNINGS
+            },
+            "webhook": {
+                "retry_attempts": WEBHOOK_RETRY_ATTEMPTS,
+                "retry_interval_seconds": WEBHOOK_RETRY_INTERVAL_SECONDS,
+                "timeout_seconds": WEBHOOK_TIMEOUT_SECONDS,
+                "background_interval_seconds": WEBHOOK_BACKGROUND_INTERVAL_SECONDS,
+                "default_url": DEFAULT_WEBHOOK_URL,
+                "global_headers": WEBHOOK_HEADERS
+            }
+        },
+        
+        "pro_features": {
+            "available": False,
+            "upgrade_info": "Contact for Pro version with configurable parameters",
+            "features": [
+                "Configurable workers (1-10+)",
+                "External Redis support",
+                "Variable task TTL (hours to months)",
+                "PostgreSQL metadata storage",
+                "/task/{id}/results endpoint",
+                "Advanced search & filtering",
+                "Custom webhook parameters",
+                "Adjustable logging modes",
+                "Priority support"
+            ]
+        }
     })
 
 # ============================================
