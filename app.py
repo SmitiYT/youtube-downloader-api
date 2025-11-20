@@ -88,24 +88,34 @@ AUTH_REQUIRED = bool(PUBLIC_BASE_URL) and bool(API_KEY)
 
 def log_startup_info():
     public_url = PUBLIC_BASE_URL
-    logger.info("=" * 60)
-    logger.info("YouTube Downloader API - PUBLIC VERSION")
-    logger.info("=" * 60)
-    logger.info("⚠️  PUBLIC VERSION - HARDCODED PARAMETERS")
-    logger.info("")
-    logger.info("📋 Configuration:")
-    storage = 'redis' if 'STORAGE_MODE' in globals() and STORAGE_MODE == 'redis' else 'memory'
-    logger.info(f"   Workers: 2 | Redis: {REDIS_HOST}:{REDIS_PORT} (256MB) | Storage: {storage}")
-    logger.info(f"   TTL: {CLEANUP_TTL_SECONDS}s (24h) | Meta: {MAX_CLIENT_META_BYTES}B, depth={MAX_CLIENT_META_DEPTH}")
-    logger.info(f"   Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
-    logger.info(f"   Resender: {int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s | Progress: {PROGRESS_LOG_MODE}")
-    logger.info("")
-    logger.info("🚀 Upgrade to Pro: support@alexbic.net")
-    logger.info("   ✓ Configurable parameters ✓ PostgreSQL ✓ /results endpoint")
-    logger.info("=" * 60)
-    
+    # Сохраняем текущий форматтер
+    root_logger = logging.getLogger()
+    handlers = root_logger.handlers if root_logger.handlers else [logging.StreamHandler()]
+    old_formatters = [h.formatter for h in handlers]
+    # Устанавливаем временный форматтер без времени
+    for h in handlers:
+        h.setFormatter(logging.Formatter('[%(levelname)s] %(name)s: %(message)s'))
+    try:
+        logger.info("=" * 60)
+        logger.info("YouTube Downloader API - PUBLIC VERSION")
+        logger.info("=" * 60)
+        logger.info("⚠️  PUBLIC VERSION - HARDCODED PARAMETERS")
+        logger.info("")
+        logger.info("📋 Configuration:")
+        storage = 'redis' if 'STORAGE_MODE' in globals() and STORAGE_MODE == 'redis' else 'memory'
+        logger.info(f"   Workers: 2 | Redis: {REDIS_HOST}:{REDIS_PORT} (256MB) | Storage: {storage}")
+        logger.info(f"   TTL: {CLEANUP_TTL_SECONDS}s (24h) | Meta: {MAX_CLIENT_META_BYTES}B, depth={MAX_CLIENT_META_DEPTH}")
+        logger.info(f"   Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
+        logger.info(f"   Resender: {int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s | Progress: {PROGRESS_LOG_MODE}")
+        logger.info("")
+        logger.info("🚀 Upgrade to Pro: support@alexbic.net")
+        logger.info("   ✓ Configurable parameters ✓ PostgreSQL ✓ /results endpoint")
+        logger.info("=" * 60)
+    finally:
+        # Возвращаем старый форматтер
+        for h, old_fmt in zip(handlers, old_formatters):
+            h.setFormatter(old_fmt)
     logger.info(f"Log level: {LOG_LEVEL} | yt-dlp: {get_yt_dlp_version()}")
-    
     # Log API access mode
     if public_url and API_KEY:
         logger.info(f"Mode: PUBLIC API | Base URL: {public_url}")
@@ -115,12 +125,10 @@ def log_startup_info():
         if public_url and not API_KEY:
             logger.warning("⚠️  PUBLIC_BASE_URL ignored (API_KEY not set)")
         logger.info("Authentication: DISABLED")
-    
     if 'TASKS_DIR' in globals():
         logger.info(f"Tasks dir: {TASKS_DIR}")
     if 'COOKIES_PATH' in globals() and os.path.exists(COOKIES_PATH):
         logger.info(f"Cookies: available")
-    
     logger.info("=" * 60)
 
 def _log_startup_once():
