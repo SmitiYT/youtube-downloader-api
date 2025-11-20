@@ -509,6 +509,9 @@ def build_structured_metadata(
         # Добавляем download_url только если есть публичный URL
         if task_download_url:
             file_entry["download_url"] = task_download_url
+        # download_url_internal всегда присутствует
+        if task_download_url_internal:
+            file_entry["download_url_internal"] = task_download_url_internal
         output_files.append(file_entry)
     
     output_data["output_files"] = output_files
