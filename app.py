@@ -93,76 +93,34 @@ def log_startup_info():
     logger.info("=" * 60)
     logger.info("⚠️  PUBLIC VERSION - HARDCODED PARAMETERS")
     logger.info("")
-    logger.info("📋 HARDCODED CONFIGURATION:")
-    logger.info("   Workers: 2 (fixed in Dockerfile)")
-    logger.info(f"   Redis: {REDIS_HOST}:{REDIS_PORT} (embedded, 256MB, localhost only)")
-    logger.info(f"   Task TTL: {CLEANUP_TTL_SECONDS}s (24 hours)")
+    logger.info("📋 Configuration:")
+    storage = 'redis' if 'STORAGE_MODE' in globals() and STORAGE_MODE == 'redis' else 'memory'
+    logger.info(f"   Workers: 2 | Redis: {REDIS_HOST}:{REDIS_PORT} (256MB) | Storage: {storage}")
+    logger.info(f"   TTL: {CLEANUP_TTL_SECONDS}s (24h) | Meta: {MAX_CLIENT_META_BYTES}B, depth={MAX_CLIENT_META_DEPTH}")
     logger.info(f"   Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
-    logger.info(f"   Resender: interval={int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s")
-    logger.info(f"   Client Meta: max_bytes={MAX_CLIENT_META_BYTES}, depth={MAX_CLIENT_META_DEPTH}, keys={MAX_CLIENT_META_KEYS}")
-    logger.info(f"   Progress Log: mode={PROGRESS_LOG_MODE}, step={PROGRESS_STEP}%")
+    logger.info(f"   Resender: {int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s | Progress: {PROGRESS_LOG_MODE}")
     logger.info("")
-    logger.info("🚀 WANT CONFIGURABLE PARAMETERS?")
-    logger.info("   ✓ Adjustable workers (1-10+)")
-    logger.info("   ✓ Variable TTL (hours to months)")
-    logger.info("   ✓ PostgreSQL metadata storage")
-    logger.info("   ✓ /task/{id}/results endpoint")
-    logger.info("   ✓ Advanced search & filtering")
-    logger.info("")
-    logger.info("📧 Upgrade to Pro: support@alexbic.net")
-    logger.info("🌐 GitHub: https://github.com/alexbic/youtube-downloader-api-pro")
+    logger.info("🚀 Upgrade to Pro: support@alexbic.net")
+    logger.info("   ✓ Configurable parameters ✓ PostgreSQL ✓ /results endpoint")
     logger.info("=" * 60)
-    logger.info(f"Auth: {'REQUIRED' if AUTH_REQUIRED else 'DISABLED'} (depends on PUBLIC_BASE_URL & API_KEY)")
+    
+    logger.info(f"Log level: {LOG_LEVEL} | yt-dlp: {get_yt_dlp_version()}")
+    
+    # Log API access mode
     if public_url and API_KEY:
-        logger.info("Mode: PUBLIC API with external URLs")
-        logger.info(f"Base URL: {public_url}")
+        logger.info(f"Mode: PUBLIC API | Base URL: {public_url}")
+        logger.info("Authentication: ENABLED")
     else:
         logger.info("Mode: INTERNAL (Docker network)")
         if public_url and not API_KEY:
-            logger.warning("WARNING: PUBLIC_BASE_URL is set but API_KEY is not! PUBLIC access is DISABLED. Using internal URLs.")
-    if INTERNAL_BASE_URL:
-        logger.info(f"Internal base URL: {INTERNAL_BASE_URL}")
-    # Некоторые константы могут быть ещё не определены при импорте — проверяем наличие
+            logger.warning("⚠️  PUBLIC_BASE_URL ignored (API_KEY not set)")
+        logger.info("Authentication: DISABLED")
+    
     if 'TASKS_DIR' in globals():
-        logger.info(f"Tasks dir: {TASKS_DIR} (files stored here)")
-    if 'COOKIES_PATH' in globals():
-        logger.info(f"Cookies file: {COOKIES_PATH} {'(exists)' if os.path.exists(COOKIES_PATH) else '(not found)'}")
-    if 'MAX_CLIENT_META_BYTES' in globals():
-        logger.info(f"client_meta limits: bytes={MAX_CLIENT_META_BYTES}, depth={MAX_CLIENT_META_DEPTH}, keys={MAX_CLIENT_META_KEYS}, str_len={MAX_CLIENT_META_STRING_LENGTH}, list_len={MAX_CLIENT_META_LIST_LENGTH}")
-    if 'STORAGE_MODE' in globals():
-        if STORAGE_MODE == 'redis' and 'REDIS_HOST' in globals():
-            logger.info(f"Storage: redis ({REDIS_HOST}:{REDIS_PORT}/db{REDIS_DB})")
-        else:
-            logger.info("Storage: memory (single-process)")
-    logger.info(f"yt-dlp version: {get_yt_dlp_version()}")
-    logger.info(f"Logging: level={LOG_LEVEL}, progress_mode={PROGRESS_LOG_MODE}, step={PROGRESS_STEP}%")
-    if 'CLEANUP_TTL_SECONDS' in globals():
-        if CLEANUP_TTL_SECONDS == 0:
-            logger.info("Cleanup: DISABLED (files persist indefinitely)")
-        else:
-            logger.info(f"Cleanup: TTL={CLEANUP_TTL_SECONDS}s ({CLEANUP_TTL_SECONDS//60}min)")
-    logger.info(f"Webhook: attempts={WEBHOOK_RETRY_ATTEMPTS}, interval={WEBHOOK_RETRY_INTERVAL_SECONDS}s, timeout={WEBHOOK_TIMEOUT_SECONDS}s")
-    logger.info(f"Resender: scan_interval={int(WEBHOOK_BACKGROUND_INTERVAL_SECONDS)}s (fixed in public version)")
-    try:
-        if os.getenv('WEBHOOK_BACKGROUND_INTERVAL_SECONDS') is not None:
-            logger.warning("Public version: WEBHOOK_BACKGROUND_INTERVAL_SECONDS env is ignored; using fixed value")
-    except Exception:
-        pass
-    if DEFAULT_WEBHOOK_URL:
-        logger.info(f"Webhook: default_url set -> {DEFAULT_WEBHOOK_URL}")
-    if WEBHOOK_HEADERS:
-        try:
-            masked = {k: ('***' if k.lower() in ('authorization', 'x-api-key', 'x-auth-token') else v) for k, v in WEBHOOK_HEADERS.items()}
-            logger.info(f"Webhook: extra headers -> {masked}")
-        except Exception:
-            logger.info("Webhook: extra headers configured")
-    # Отобразим предполагаемое число воркеров (если задали WORKERS)
-    try:
-        workers_env = os.getenv('WORKERS')
-        if workers_env:
-            logger.info(f"Workers (gunicorn): {workers_env}")
-    except Exception:
-        pass
+        logger.info(f"Tasks dir: {TASKS_DIR}")
+    if 'COOKIES_PATH' in globals() and os.path.exists(COOKIES_PATH):
+        logger.info(f"Cookies: available")
+    
     logger.info("=" * 60)
 
 def _log_startup_once():
