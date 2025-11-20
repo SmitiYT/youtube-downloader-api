@@ -1218,7 +1218,7 @@ def download_video():
         if bool(data.get('async', False)):
             cleanup_old_files()
             task_id = str(uuid.uuid4())
-            logger.info(f"[{task_id[:8]}] Task created (async): {video_url}")
+            logger.info(f"Task created (async): {task_id} | {video_url}")
             logger.debug(f"[{task_id[:8]}] quality={quality}, webhook={'yes' if webhook_url else 'no'}")
             create_task_dirs(task_id)
             task_data = {
@@ -1271,7 +1271,7 @@ def download_video():
 
         # Sync mode: download immediately and return result
         task_id = str(uuid.uuid4())
-        logger.info(f"[{task_id[:8]}] Task created (sync): {video_url}")
+        logger.info(f"Task created (sync): {task_id} | {video_url}")
         logger.debug(f"[{task_id[:8]}] quality={quality}")
         created_at_iso = datetime.now().isoformat()
         create_task_dirs(task_id)
