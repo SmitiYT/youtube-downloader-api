@@ -1786,41 +1786,31 @@ def _background_download(
             )
             save_task_metadata(task_id, [meta_item])
 
-            # webhook payload (client_meta последним)
-            payload = {
-                "task_id": task_id,
-                "status": "completed",
-                "video_id": info.get('id'),
-                "title": info.get('title'),
-                "filename": filename,
-                "download_endpoint": download_endpoint,
-                "storage_rel_path": storage_rel_path,
-                "duration": info.get('duration'),
-                "resolution": info.get('resolution'),
-                "ext": ext,
-                "created_at": created_at_iso,
-                "completed_at": completed_at_iso,
-                "expires_at": expires_at_iso
-            }
-            if base_url_external:
-                payload["task_download_url"] = full_task_download_url
-                payload["metadata_url"] = build_absolute_url(f"/download/{task_id}/metadata.json", base_url_external)
-                payload["task_download_url_internal"] = full_task_download_url_internal
-                payload["metadata_url_internal"] = build_internal_url(f"/download/{task_id}/metadata.json", base_url_internal or None)
-            else:
-                payload["task_download_url_internal"] = full_task_download_url_internal
-                payload["metadata_url_internal"] = build_internal_url(f"/download/{task_id}/metadata.json", base_url_internal or None)
-            # Добавляем webhook объект если есть
-            if webhook_url or webhook_headers:
-                webhook_obj = {}
-                if webhook_url:
-                    webhook_obj["url"] = webhook_url
-                if webhook_headers:
-                    webhook_obj["headers"] = webhook_headers
-                payload["webhook"] = webhook_obj
-            if client_meta is not None:
-                payload["client_meta"] = client_meta
-            _post_webhook(payload)
+            # webhook payload теперь строго build_structured_metadata (единый формат)
+            webhook_payload = build_structured_metadata(
+                task_id=task_id,
+                status="completed",
+                created_at=created_at_iso,
+                completed_at=completed_at_iso,
+                expires_at=expires_at_iso,
+                video_url=video_url,
+                video_id=info.get('id'),
+                title=info.get('title'),
+                duration=info.get('duration'),
+                resolution=info.get('resolution'),
+                ext=ext,
+                filename=filename,
+                download_endpoint=download_endpoint,
+                storage_rel_path=storage_rel_path,
+                task_download_url=full_task_download_url if base_url_external else None,
+                task_download_url_internal=full_task_download_url_internal,
+                metadata_url=build_absolute_url(f"/download/{task_id}/metadata.json", base_url_external) if base_url_external else None,
+                metadata_url_internal=build_internal_url(f"/download/{task_id}/metadata.json", base_url_internal or None),
+                webhook_url=webhook_url,
+                webhook_headers=webhook_headers,
+                client_meta=client_meta
+            )
+            _post_webhook(webhook_payload)
         else:
             logger.error(f"[{task_id[:8]}] DOWNLOAD FAILED: File not downloaded")
             error_info = classify_youtube_error("File not downloaded")
