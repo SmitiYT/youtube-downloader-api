@@ -484,6 +484,9 @@ def build_structured_metadata(
         # download_url_internal всегда присутствует
         if task_download_url_internal:
             file_entry["download_url_internal"] = task_download_url_internal
+        # Добавляем expires_at если есть
+        if expires_at:
+            file_entry["expires_at"] = expires_at
         output_files.append(file_entry)
 
     output_data["output_files"] = output_files
@@ -500,6 +503,8 @@ def build_structured_metadata(
         output_data["ttl_seconds"] = ttl_seconds
     if ttl_human is not None:
         output_data["ttl_human"] = ttl_human
+    if expires_at is not None:
+        output_data["expires_at"] = expires_at
 
     result["output"] = output_data
 
