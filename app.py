@@ -478,12 +478,12 @@ def build_structured_metadata(
             "filename": filename,
             "download_path": download_endpoint
         }
-        # Добавляем download_url только если есть публичный URL
-        if task_download_url:
-            file_entry["download_url"] = task_download_url
-        # download_url_internal всегда присутствует
+        # Добавляем download_url_internal всегда
         if task_download_url_internal:
             file_entry["download_url_internal"] = task_download_url_internal
+        # Добавляем download_url только если есть публичный URL (при наличии AUTH и PUBLIC_BASE_URL)
+        if task_download_url:
+            file_entry["download_url"] = task_download_url
         # Добавляем expires_at если есть
         if expires_at:
             file_entry["expires_at"] = expires_at
