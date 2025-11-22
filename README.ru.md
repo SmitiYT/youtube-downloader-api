@@ -610,8 +610,10 @@ python app.py
 | ~~`WEBHOOK_HEADERS`~~ | — | ❌ **Недоступен** в публичной версии. Используйте поле `webhook.headers` в запросе. Доступен в Pro версии. |
 | **Логирование** |||
 | `LOG_LEVEL` | `INFO` | Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
-| `PROGRESS_LOG` | `off` | Логирование прогресса yt-dlp (off, compact, full). |
-| `PROGRESS_STEP` | `10` | Шаг прогресса в % для режима compact. |
+| ~~`PROGRESS_LOG`~~ | `off` | ⚙️ **Зашит в коде** в публичной версии. Логирование прогресса yt-dlp всегда выключено. Настраивается в Pro. |
+| ~~`PROGRESS_STEP`~~ | `10` | ⚙️ **Зашит в коде** в публичной версии. Шаг прогресса в % для режима compact. Настраивается в Pro. |
+| ~~`LOG_YTDLP_OPTS`~~ | `false` | ⚙️ **Зашит в коде** в публичной версии. Логирование опций yt-dlp отключено. Настраивается в Pro. |
+| ~~`LOG_YTDLP_WARNINGS`~~ | `false` | ⚙️ **Зашит в коде** в публичной версии. Проброс предупреждений yt-dlp отключен. Настраивается в Pro. |
 | **Лимиты метаданных клиента** (зашиты в коде) |||
 | ~~`MAX_CLIENT_META_BYTES`~~ | `16384` | ⚙️ **Зашит в коде** в публичной версии. Макс. размер для `client_meta` (байты). Настраивается в Pro. |
 | ~~`MAX_CLIENT_META_DEPTH`~~ | `5` | ⚙️ **Зашит в коде** в публичной версии. Макс. глубина вложенности для `client_meta`. Настраивается в Pro. |
@@ -703,40 +705,17 @@ docker run -d -p 5000:5000 \
   alexbic/youtube-downloader-api:latest
 ```
 
-### Отладка
-- Включить подробный прогресс и отладочный уровень:
-```bash
-docker run -d -p 5000:5000 \
-  -e PROGRESS_LOG=full -e LOG_LEVEL=DEBUG -e LOG_YTDLP_OPTS=true \
-  alexbic/youtube-downloader-api:latest
-```
-
 ### Логирование
 - `LOG_LEVEL`: уровень логов приложения. Значения: `DEBUG`, `INFO` (по умолчанию), `WARNING`, `ERROR`, `CRITICAL`.
-- `PROGRESS_LOG`: управление логами прогресса скачивания yt-dlp.
-  - `off` (по умолчанию): полностью подавляет прогресс-спам (включаются quiet/noprogress у yt-dlp).
-  - `compact`: компактные логи только по шагам (каждые `PROGRESS_STEP`%), например: `[abcd1234] progress: 20%`.
-  - `full`: подробные логи yt-dlp как есть (может быть очень многословно).
-- `PROGRESS_STEP`: шаг в процентах для `compact`-режима (по умолчанию 10).
-- `LOG_YTDLP_OPTS`: если `true`, логирует применённые опции yt-dlp (для отладки).
-- `LOG_YTDLP_WARNINGS`: если `true`, предупреждения yt-dlp будут попадать в логи приложения.
+- Прогресс скачивания yt-dlp отключен в публичной версии (hardcoded).
+- Опции и предупреждения yt-dlp не логируются в публичной версии (hardcoded).
 
-Примеры запуска:
+Пример запуска:
 
 ```bash
-# Полное подавление прогресса (рекомендуется для production)
+# Установка уровня логирования
 docker run -d -p 5000:5000 \
-  -e PROGRESS_LOG=off -e LOG_LEVEL=INFO \
-  alexbic/youtube-downloader-api:latest
-
-# Компактные логи прогресса каждые 20%
-docker run -d -p 5000:5000 \
-  -e PROGRESS_LOG=compact -e PROGRESS_STEP=20 \
-  alexbic/youtube-downloader-api:latest
-
-# Полные логи прогресса (для отладки)
-docker run -d -p 5000:5000 \
-  -e PROGRESS_LOG=full -e LOG_LEVEL=DEBUG \
+  -e LOG_LEVEL=DEBUG \
   alexbic/youtube-downloader-api:latest
 ```
 
@@ -839,9 +818,8 @@ docker logs -t youtube-downloader
 - `CRITICAL` - только критические ошибки
 
 **Режимы логирования прогресса:**
-- `off` (по умолчанию) - без спама прогресса
-- `compact` - компактный прогресс каждые N% (настраивается через `PROGRESS_STEP`)
-- `full` - подробный прогресс yt-dlp (очень многословно)
+- В публичной версии прогресс yt-dlp всегда отключен (hardcoded)
+- Настраиваемые режимы доступны в Pro версии
 
 ---
 

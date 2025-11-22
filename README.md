@@ -343,10 +343,10 @@ GET /download/<task_id>/metadata.json
 | ~~`DEFAULT_WEBHOOK_URL`~~ | — | ❌ **Not available** in public version. Specify `webhook.url` in each request. Available in Pro version. |
 | **Logging** |||
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
-| `PROGRESS_LOG` | `off` | yt-dlp progress logging (off, compact, full). |
-| `PROGRESS_STEP` | `10` | Progress step in % for compact mode. |
-| `LOG_YTDLP_OPTS` | `false` | Log yt-dlp options (debug). |
-| `LOG_YTDLP_WARNINGS` | `false` | Forward yt-dlp warnings to app logs. |
+| ~~`PROGRESS_LOG`~~ | `off` | ⚙️ **Hardcoded** in public version. yt-dlp progress logging always off. Configurable in Pro. |
+| ~~`PROGRESS_STEP`~~ | `10` | ⚙️ **Hardcoded** in public version. Progress step in % for compact mode. Configurable in Pro. |
+| ~~`LOG_YTDLP_OPTS`~~ | `false` | ⚙️ **Hardcoded** in public version. yt-dlp options logging disabled. Configurable in Pro. |
+| ~~`LOG_YTDLP_WARNINGS`~~ | `false` | ⚙️ **Hardcoded** in public version. yt-dlp warnings forwarding disabled. Configurable in Pro. |
 | **Client Metadata Limits** (hardcoded) |||
 | ~~`MAX_CLIENT_META_BYTES`~~ | `16384` | ⚙️ **Hardcoded** in public version. Max size for `client_meta` (bytes). Configurable in Pro. |
 | ~~`MAX_CLIENT_META_DEPTH`~~ | `5` | ⚙️ **Hardcoded** in public version. Max nesting depth for `client_meta`. Configurable in Pro. |
