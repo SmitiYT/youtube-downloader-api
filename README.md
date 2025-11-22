@@ -347,12 +347,12 @@ GET /download/<task_id>/metadata.json
 | `PROGRESS_STEP` | `10` | Progress step in % for compact mode. |
 | `LOG_YTDLP_OPTS` | `false` | Log yt-dlp options (debug). |
 | `LOG_YTDLP_WARNINGS` | `false` | Forward yt-dlp warnings to app logs. |
-| **Client Metadata Limits** |||
-| `MAX_CLIENT_META_BYTES` | `16384` | Max size for `client_meta` (bytes). |
-| `MAX_CLIENT_META_DEPTH` | `5` | Max nesting depth for `client_meta`. |
-| `MAX_CLIENT_META_KEYS` | `200` | Max keys in `client_meta` object. |
-| `MAX_CLIENT_META_STRING_LENGTH` | `1000` | Max string value length. |
-| `MAX_CLIENT_META_LIST_LENGTH` | `200` | Max list length. |
+| **Client Metadata Limits** (hardcoded) |||
+| ~~`MAX_CLIENT_META_BYTES`~~ | `16384` | ⚙️ **Hardcoded** in public version. Max size for `client_meta` (bytes). Configurable in Pro. |
+| ~~`MAX_CLIENT_META_DEPTH`~~ | `5` | ⚙️ **Hardcoded** in public version. Max nesting depth for `client_meta`. Configurable in Pro. |
+| ~~`MAX_CLIENT_META_KEYS`~~ | `200` | ⚙️ **Hardcoded** in public version. Max keys in `client_meta` object. Configurable in Pro. |
+| ~~`MAX_CLIENT_META_STRING_LENGTH`~~ | `1000` | ⚙️ **Hardcoded** in public version. Max string value length. Configurable in Pro. |
+| ~~`MAX_CLIENT_META_LIST_LENGTH`~~ | `200` | ⚙️ **Hardcoded** in public version. Max list length. Configurable in Pro. |
 
 ### URL Configuration
 
