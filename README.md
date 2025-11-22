@@ -335,10 +335,10 @@ GET /download/<task_id>/metadata.json
 | **Task Management** |||
 | ~~`CLEANUP_TTL_SECONDS`~~ | `86400` | ❌ **Not configurable** in public version. Fixed at 24 hours. |
 | **Webhook Configuration** |||
-| `WEBHOOK_RETRY_ATTEMPTS` | `3` | Max webhook delivery attempts (immediate retries on error). |
-| `WEBHOOK_RETRY_INTERVAL_SECONDS` | `5` | Delay between immediate webhook retries (seconds). |
-| `WEBHOOK_TIMEOUT_SECONDS` | `8` | Webhook request timeout (seconds). |
-| ~~`WEBHOOK_BACKGROUND_INTERVAL_SECONDS`~~ | `900` | ❌ **Not configurable** in public version. Background resender scans every 15 minutes (fixed). |
+| ~~`WEBHOOK_RETRY_ATTEMPTS`~~ | `3` | ⚙️ **Hardcoded** in public version. Max webhook delivery attempts (immediate retries on error). Configurable in Pro. |
+| ~~`WEBHOOK_RETRY_INTERVAL_SECONDS`~~ | `5` | ⚙️ **Hardcoded** in public version. Delay between immediate webhook retries (seconds). Configurable in Pro. |
+| ~~`WEBHOOK_TIMEOUT_SECONDS`~~ | `8` | ⚙️ **Hardcoded** in public version. Webhook request timeout (seconds). Configurable in Pro. |
+| ~~`WEBHOOK_BACKGROUND_INTERVAL_SECONDS`~~ | `900` | ⚙️ **Hardcoded** in public version. Background resender scans every 15 minutes (fixed). Configurable in Pro. |
 | ~~`WEBHOOK_HEADERS`~~ | — | ❌ **Not available** in public version. Use per-request `webhook.headers` field instead. Available in Pro version. |
 | ~~`DEFAULT_WEBHOOK_URL`~~ | — | ❌ **Not available** in public version. Specify `webhook.url` in each request. Available in Pro version. |
 | **Logging** |||
@@ -536,7 +536,7 @@ Authorization: Bearer local-test-token
 X-Source: ytdl
 ```
 
-Note: Delivery uses retry policy (`WEBHOOK_RETRY_ATTEMPTS`, `WEBHOOK_RETRY_INTERVAL_SECONDS`, `WEBHOOK_TIMEOUT_SECONDS`). Failures never abort the main download process.
+Note: Delivery uses hardcoded retry policy (3 attempts, 5s interval, 8s timeout). Failures never abort the main download process.
 
 **Success payload:**
 ```json
@@ -586,9 +586,9 @@ Note: Delivery uses retry policy (`WEBHOOK_RETRY_ATTEMPTS`, `WEBHOOK_RETRY_INTER
 
 **Configuration:**
 - `webhook.url` must start with http(s):// and be < 2048 characters
-- Timeout: `WEBHOOK_TIMEOUT_SECONDS` (default: 8s)
-- Retry attempts: `WEBHOOK_RETRY_ATTEMPTS` (default: 3)
-- Retry interval: `WEBHOOK_RETRY_INTERVAL_SECONDS` (default: 5s)
+- Timeout: 8s (hardcoded in public version)
+- Retry attempts: 3 (hardcoded in public version)
+- Retry interval: 5s (hardcoded in public version)
 - Delivery is best-effort (errors don't fail the main process)
 
 ---
