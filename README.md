@@ -319,14 +319,9 @@ GET /download/<task_id>/metadata.json
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| **Authentication & URLs** |||
 | `API_KEY` | — | Enables public mode (Bearer required). When unset, internal mode (no auth). |
 | `PUBLIC_BASE_URL` | — | External base for absolute URLs (https://domain.com/api). Used only if `API_KEY` is set. |
 | `INTERNAL_BASE_URL` | — | Base for background URL generation (webhooks, Docker network). |
-| **Worker Configuration** |||
-| ~~`WORKERS`~~ | `2` | ❌ **Not configurable** in public version. Fixed at 2 workers. |
-| **Redis Configuration** |||
-| **Logging** |||
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
 
 ### URL Configuration
