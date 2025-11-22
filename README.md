@@ -339,8 +339,8 @@ GET /download/<task_id>/metadata.json
 | `WEBHOOK_RETRY_INTERVAL_SECONDS` | `5` | Delay between immediate webhook retries (seconds). |
 | `WEBHOOK_TIMEOUT_SECONDS` | `8` | Webhook request timeout (seconds). |
 | ~~`WEBHOOK_BACKGROUND_INTERVAL_SECONDS`~~ | `900` | ❌ **Not configurable** in public version. Background resender scans every 15 minutes (fixed). |
-| `WEBHOOK_HEADERS` | — | Global webhook headers (JSON string). Example: `{"X-API-Key": "key"}`. Optional. Per-request headers override these. Sensitive headers masked in logs. |
-| `DEFAULT_WEBHOOK_URL` | — | Fallback webhook URL (async). Used when request has no `webhook` object. Must start with http(s)://, < 2048 chars. |
+| ~~`WEBHOOK_HEADERS`~~ | — | ❌ **Not available** in public version. Use per-request `webhook.headers` field instead. Available in Pro version. |
+| ~~`DEFAULT_WEBHOOK_URL`~~ | — | ❌ **Not available** in public version. Specify `webhook.url` in each request. Available in Pro version. |
 | **Logging** |||
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). |
 | `PROGRESS_LOG` | `off` | yt-dlp progress logging (off, compact, full). |
@@ -395,16 +395,9 @@ The public version includes a **background webhook resender service** that autom
 2. **Background retries**: Every 15 minutes until successful or TTL expires
 
 **Configuration:**
-- Use `DEFAULT_WEBHOOK_URL` to set fallback webhook for all async tasks without explicit `webhook.url` in request
-- Use `WEBHOOK_HEADERS` to add authentication headers: `{"Authorization": "Bearer XXX"}`
+- Specify `webhook.url` and optional `webhook.headers` in each request
 - Monitor webhook delivery in logs (set `LOG_LEVEL=DEBUG` for detailed webhook payload preview)
-
-**Example with default webhook:**
-```yaml
-environment:
-  DEFAULT_WEBHOOK_URL: "https://your-server.com/webhooks/ytdl"
-  WEBHOOK_HEADERS: '{"Authorization": "Bearer secret123"}'
-```
+- Per-request headers allow flexible authentication per webhook
 
 ---
 
@@ -490,50 +483,9 @@ YouTube is gradually requiring "PO Token" for downloads. If cookies don't help:
 
 If `webhook.url` is provided in `POST /download_video`, the service POSTs to the URL on task completion.
 
-### Default Webhook URL
-
-Set `DEFAULT_WEBHOOK_URL` to avoid specifying `webhook.url` in every async request:
-
-```yaml
-environment:
-  DEFAULT_WEBHOOK_URL: "https://hooks.internal/downloader"
-```
-
-If the request body omits `webhook.url`, the fallback is used. If both are set, the explicit `webhook.url` in the request overrides the default.
-
-Validation rules:
-- Must start with `http://` or `https://`
-- Length < 2048 chars
-- Applied only for async tasks (`"async": true`)
-
-### Custom Webhook Headers
-
-Use `WEBHOOK_HEADERS` to inject auth or tracing headers into every webhook POST without modifying client requests.
-
-Allowed formats:
-1. JSON object (preferred)
-   ```bash
-   WEBHOOK_HEADERS='{"Authorization":"Bearer abc123","X-Source":"ytdl"}'
-   ```
-2. Delimited list (`;`, `,` or newlines)
-   ```bash
-   WEBHOOK_HEADERS='Authorization: Bearer abc123; X-Source: ytdl'
-   ```
-
-Parsing rules:
-- Each entry: `Key: Value` or `Key=Value`
-- Quotes around values are stripped
-- Invalid fragments are ignored silently
-- `Content-Type` in `WEBHOOK_HEADERS` is ignored (service always sends `application/json`)
-
-Security & Observability:
-- Startup logs mask values for headers: `Authorization`, `X-API-Key`, `X-Auth-Token`
-- Use HTTPS for external endpoints
-- Prefer secrets/secure env injection for tokens (Docker secrets, orchestrator vaults)
-
 ### Per-Request Webhook Headers
 
-You can specify custom headers for a specific webhook using the `webhook.headers` field in the request body. These headers override global `WEBHOOK_HEADERS` for that specific webhook.
+You can specify custom headers for each webhook using the `webhook.headers` field in the request body.
 
 ```json
 {
@@ -555,7 +507,6 @@ Validation rules:
 - Header name max length: 256 characters
 - Header value max length: 2048 characters
 - `Content-Type` is always `application/json` and cannot be overridden
-- Priority: per-request `webhook.headers` > global `WEBHOOK_HEADERS`
 
 Use cases:
 - Different API keys for different webhooks
@@ -563,16 +514,22 @@ Use cases:
 - Custom tracing/correlation IDs
 - Client-specific identification headers
 
-Example docker-compose override:
-```yaml
-services:
-  youtube-downloader:
-    environment:
-      DEFAULT_WEBHOOK_URL: "http://webhook:9001/webhook"
-      WEBHOOK_HEADERS: '{"Authorization":"Bearer local-test-token","X-Source":"ytdl"}'
+Example request with webhook headers:
+```json
+{
+  "url": "https://youtube.com/watch?v=...",
+  "async": true,
+  "webhook": {
+    "url": "http://webhook:9001/webhook",
+    "headers": {
+      "Authorization": "Bearer local-test-token",
+      "X-Source": "ytdl"
+    }
+  }
+}
 ```
 
-Resulting webhook request headers (simplified):
+Resulting webhook request headers:
 ```
 Content-Type: application/json
 Authorization: Bearer local-test-token
