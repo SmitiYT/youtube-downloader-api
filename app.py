@@ -310,10 +310,12 @@ def _prepare_ydl_opts(task_id: str | None, video_url: str, quality: str, outtmpl
         'no_warnings': True,
         # Больше устойчивости к временным сбоям сети/CDN
         'retries': 10,
-        'fragment_retries': 10,
+        'fragment_retries': 3,  # Reduced to fail faster on blocked fragments
         'socket_timeout': 20,
         # Снижаем параллелизм фрагментов для стабильности (особенно в ограниченных средах)
         'concurrent_fragment_downloads': 1,
+        # Skip unavailable fragments instead of failing (YouTube HLS 403 fix)
+        'skip_unavailable_fragments': True,
         # Честный User-Agent помогает против редких 5xx/anti-bot эвристик
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
