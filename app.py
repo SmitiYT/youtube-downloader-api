@@ -869,16 +869,16 @@ def _try_send_webhook_once(url: str, payload: dict, task_id: str, webhook_header
                 pass
         resp = requests.post(url, headers=headers, json=payload, timeout=WEBHOOK_TIMEOUT_SECONDS)
         if 200 <= resp.status_code < 300:
-            logger.info(f"[{task_id[:8]}] 🚦 Webhook re-delivered successfully (HTTP {resp.status_code})")
+            logger.info(f"[{task_id[:8]}] 🚦 Webhook retry delivered ({resp.status_code})")
             return True
         preview = (resp.text or "")[:500]
         if preview:
-            logger.warning(f"[{task_id[:8]}] 🚦 Webhook re-delivery failed (HTTP {resp.status_code}); body: {preview}")
+            logger.warning(f"[{task_id[:8]}] 🚦 Webhook retry failed ({resp.status_code}); body: {preview}")
         else:
-            logger.warning(f"[{task_id[:8]}] 🚦 Webhook re-delivery failed (HTTP {resp.status_code}) (empty body)")
+            logger.warning(f"[{task_id[:8]}] 🚦 Webhook retry failed ({resp.status_code})")
         return False
     except Exception as e:
-        logger.warning(f"[{task_id[:8]}] 🚦 Webhook re-delivery exception: {e}")
+        logger.warning(f"[{task_id[:8]}] 🚦 Webhook retry exception: {e}")
         return False
 
 def _webhook_resender_loop():
@@ -1566,8 +1566,7 @@ def _background_download(
         if not webhook_url:
             logger.debug(f"[{task_id[:8]}] Webhook skipped: no webhook_url provided")
             return
-        logger.info(f"[{task_id[:8]}] 🚦 Sending webhook to {webhook_url}")
-        logger.debug(f"[{task_id[:8]}] webhook_url={webhook_url}")
+        logger.debug(f"[{task_id[:8]}] Sending webhook to {webhook_url}")
         headers = {"Content-Type": "application/json"}
         # Добавляем глобальные пользовательские заголовки из конфига
         try:
@@ -1610,7 +1609,7 @@ def _background_download(
                 # Используем json= для корректного формирования тела и заголовков
                 resp = requests.post(webhook_url, headers=headers, json=payload, timeout=WEBHOOK_TIMEOUT_SECONDS)
                 if 200 <= resp.status_code < 300:
-                    logger.info(f"[{task_id[:8]}] 🚦 Webhook delivered successfully (HTTP {resp.status_code}) → {webhook_url}")
+                    logger.info(f"[{task_id[:8]}] 🚦 Webhook delivered ({resp.status_code}) → {webhook_url}")
                     st.update({
                         "status": "delivered",
                         "attempts": int(st.get("attempts") or 0) + 1,
@@ -1624,9 +1623,9 @@ def _background_download(
                 # Логируем тело ответа (усечённое) для упрощения диагностики в n8n
                 resp_preview = (resp.text or "")[:500]
                 if resp_preview:
-                    logger.warning(f"[{task_id[:8]}] 🚦 Webhook failed (HTTP {resp.status_code}) → {webhook_url}; body: {resp_preview}")
+                    logger.warning(f"[{task_id[:8]}] 🚦 Webhook failed ({resp.status_code}) → {webhook_url}; body: {resp_preview}")
                 else:
-                    logger.warning(f"[{task_id[:8]}] 🚦 Webhook failed (HTTP {resp.status_code}) → {webhook_url} (empty body)")
+                    logger.warning(f"[{task_id[:8]}] 🚦 Webhook failed ({resp.status_code}) → {webhook_url}")
                 # Неположительные коды считаем ошибкой доставки
             except Exception as e:
                 logger.warning(f"[{task_id[:8]}] 🚦 Webhook attempt {i} failed: {e} → {webhook_url}")
@@ -1661,7 +1660,7 @@ def _background_download(
                 current_meta["status"] = "downloading"
                 current_meta["started_at"] = datetime.now().isoformat()
                 save_task_metadata(task_id, current_meta, verify=True)
-                logger.info(f"[{task_id[:8]}] Metadata updated: queued -> downloading")
+                logger.debug(f"[{task_id[:8]}] Metadata updated: queued -> downloading")
             else:
                 logger.warning(f"[{task_id[:8]}] metadata.json not found, skipping update")
         except Exception as e:
@@ -1694,7 +1693,7 @@ def _background_download(
                 current_meta["output"]["resolution"] = info.get('resolution')
                 current_meta["output"]["ext"] = ext
                 save_task_metadata(task_id, current_meta, verify=True)
-                logger.info(f"[{task_id[:8]}] Metadata updated: video info added")
+                logger.debug(f"[{task_id[:8]}] Metadata updated: video info added")
             else:
                 logger.warning(f"[{task_id[:8]}] metadata.json not found for video info update")
         except Exception as e:
@@ -1778,11 +1777,11 @@ def _background_download(
             )
             
             # Сохраняем финальный metadata.json с верификацией
-            logger.info(f"[{task_id[:8]}] Saving final metadata.json (status=completed)")
+            logger.debug(f"[{task_id[:8]}] Saving final metadata.json (status=completed)")
             logger.debug(f"[{task_id[:8]}] Final metadata keys: {list(meta_item.keys())}")
             try:
                 save_task_metadata(task_id, [meta_item], verify=True)
-                logger.info(f"[{task_id[:8]}] ✓ Final metadata.json saved and verified successfully")
+                logger.debug(f"[{task_id[:8]}] ✓ Final metadata.json saved and verified successfully")
             except Exception as e:
                 logger.error(f"[{task_id[:8]}] ✗ CRITICAL: Failed to save final metadata: {e}")
                 raise
@@ -1793,7 +1792,7 @@ def _background_download(
                     "status": "completed",
                     "metadata": meta_item  # Полная структура для моментального ответа
                 })
-                logger.info(f"[{task_id[:8]}] 💾 Redis synchronized: metadata.json → completed")
+                logger.debug(f"[{task_id[:8]}] 💾 Redis synchronized: metadata.json → completed")
             except Exception as e:
                 logger.warning(f"[{task_id[:8]}] Failed to sync Redis (non-critical): {e}")
                 # Не критично - metadata.json уже сохранён
@@ -1842,7 +1841,7 @@ def _background_download(
                     "status": "error",
                     "metadata": metadata  # Полная структура ошибки
                 })
-                logger.info(f"[{task_id[:8]}] 💾 Redis synchronized: metadata.json → error")
+                logger.debug(f"[{task_id[:8]}] 💾 Redis synchronized: metadata.json → error")
             except Exception as e:
                 logger.warning(f"[{task_id[:8]}] Failed to sync Redis (non-critical): {e}")
             
@@ -1886,7 +1885,7 @@ def _background_download(
                 "status": "error",
                 "metadata": metadata  # Полная структура ошибки для быстрого доступа
             })
-            logger.info(f"[{task_id[:8]}] 💾 Redis synchronized: metadata.json → error")
+            logger.debug(f"[{task_id[:8]}] 💾 Redis synchronized: metadata.json → error")
         except Exception as sync_err:
             logger.warning(f"[{task_id[:8]}] Failed to sync Redis (non-critical): {sync_err}")
         
