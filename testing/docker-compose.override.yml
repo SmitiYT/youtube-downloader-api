@@ -1,7 +1,0 @@
-services:
-  youtube-downloader:
-    # Для локального тестирования: собираем из исходников
-    build:
-      context: /Users/bic/dev/youtube-downloader-api
-      dockerfile: Dockerfile
-    image: youtube-downloader-api-local:test
