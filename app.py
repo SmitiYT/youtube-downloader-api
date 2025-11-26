@@ -1303,10 +1303,10 @@ try:
         with open(marker_file, 'w') as f:
             f.write(str(os.getpid()))
 
-        # 1. Запускаем startup recovery в фоновом потоке (блокирует endpoint до завершения)
-        _recovery_thread = threading.Thread(target=_recover_interrupted_tasks_once, name='startup-recovery', daemon=True)
-        _recovery_thread.start()
-        logger.debug(f"Startup recovery thread started in process {os.getpid()}")
+        # 1. Выполняем startup recovery синхронно (блокирует запуск до завершения)
+        logger.debug(f"Starting startup recovery in process {os.getpid()}")
+        _recover_interrupted_tasks_once()
+        logger.debug(f"Startup recovery completed in process {os.getpid()}")
 
         # 2. Запускаем runtime recovery loop для повторов с ошибками
         _retry_thread = threading.Thread(target=_task_recovery_loop, name='task-recovery', daemon=True)
