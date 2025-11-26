@@ -79,6 +79,18 @@ def _parse_webhook_headers(raw: str | None) -> dict:
 
 WEBHOOK_HEADERS = _parse_webhook_headers(_WEBHOOK_HEADERS_ENV)
 
+# ============================================
+# TASK RECOVERY CONFIGURATION
+# ============================================
+# Глобальный флаг блокировки endpoint во время startup recovery
+RECOVERY_IN_PROGRESS = True
+# Маркер-файл для предотвращения повторного запуска recovery в одном контейнере
+RECOVERY_MARKER = '/tmp/youtube_downloader_recovery_done'
+# Интервалы повторов для recoverable ошибок (30 min, 2 hours, 6 hours)
+RECOVERY_RETRY_DELAYS = [30 * 60, 2 * 60 * 60, 6 * 60 * 60]  # секунды
+# Максимальное количество попыток восстановления
+MAX_RECOVERY_ATTEMPTS = 3
+
 API_KEY = os.getenv('API_KEY')
 PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL') or os.getenv('EXTERNAL_BASE_URL')
 # Опциональный базовый URL для внутреннего контура (Docker network)
@@ -771,72 +783,328 @@ def validate_client_meta(client_meta):
     return True, None
 
 def classify_youtube_error(error_message: str) -> dict:
-    """Классифицирует ошибку YouTube для автоматической обработки"""
+    """Классифицирует ошибку YouTube для автоматической обработки с поддержкой auto-recovery"""
     error_lower = error_message.lower()
-    
+
+    # Recoverable errors - временные проблемы, стоит повторить
     if 'http error 5' in error_lower or 'internal server error' in error_lower:
         return {
             "error_type": "network_or_server_error",
             "error_message": "Upstream 5xx error from video server",
-            "user_action": "Retry later; usually transient server issue"
-        }
-    if 'private video' in error_lower:
-        return {
-            "error_type": "private_video",
-            "error_message": "Video is private",
-            "user_action": "Mark as unavailable - private video"
-        }
-    elif 'video unavailable' in error_lower or 'this video is unavailable' in error_lower:
-        return {
-            "error_type": "unavailable",
-            "error_message": "Video is unavailable",
-            "user_action": "Mark as unavailable - deleted or removed"
-        }
-    elif 'video has been removed' in error_lower or 'deleted' in error_lower:
-        return {
-            "error_type": "deleted",
-            "error_message": "Video has been removed",
-            "user_action": "Mark as unavailable - deleted by uploader"
-        }
-    elif 'not available in your country' in error_lower or 'region' in error_lower:
-        return {
-            "error_type": "region_blocked",
-            "error_message": "Video is not available in your region",
-            "user_action": "Mark as region-restricted"
-        }
-    elif 'sign in to confirm' in error_lower and 'age' in error_lower:
-        return {
-            "error_type": "age_restricted",
-            "error_message": "Video is age-restricted",
-            "user_action": "Requires authentication - age verification"
-        }
-    elif 'copyright' in error_lower or 'copyright claim' in error_lower:
-        return {
-            "error_type": "copyright_claim",
-            "error_message": "Video removed due to copyright claim",
-            "user_action": "Mark as unavailable - copyright"
-        }
-    elif 'video not found' in error_lower or 'video id' in error_lower and 'invalid' in error_lower:
-        return {
-            "error_type": "not_found",
-            "error_message": "Video not found",
-            "user_action": "Mark as unavailable - invalid ID"
+            "user_action": "Retry later; usually transient server issue",
+            "recoverable": True
         }
     elif 'sign in' in error_lower or 'bot' in error_lower:
         return {
             "error_type": "authentication_required",
             "error_message": "YouTube requires authentication (cookies needed)",
-            "user_action": "Check cookies file or retry later"
+            "user_action": "Check cookies file or retry later",
+            "recoverable": True
+        }
+    elif 'network' in error_lower or 'connection' in error_lower or 'timeout' in error_lower or 'timed out' in error_lower:
+        return {
+            "error_type": "network_error",
+            "error_message": "Network connection error",
+            "user_action": "Retry later; network issue",
+            "recoverable": True
+        }
+    elif 'rate limit' in error_lower or 'too many requests' in error_lower or 'slow down' in error_lower:
+        return {
+            "error_type": "rate_limit",
+            "error_message": "Rate limit exceeded",
+            "user_action": "Retry later; too many requests",
+            "recoverable": True
+        }
+
+    # Non-recoverable errors - постоянные проблемы, повтор бесполезен
+    elif 'private video' in error_lower:
+        return {
+            "error_type": "private_video",
+            "error_message": "Video is private",
+            "user_action": "Mark as unavailable - private video",
+            "recoverable": False
+        }
+    elif 'video unavailable' in error_lower or 'this video is unavailable' in error_lower:
+        return {
+            "error_type": "unavailable",
+            "error_message": "Video is unavailable",
+            "user_action": "Mark as unavailable - deleted or removed",
+            "recoverable": False
+        }
+    elif 'video has been removed' in error_lower or 'deleted' in error_lower:
+        return {
+            "error_type": "deleted",
+            "error_message": "Video has been removed",
+            "user_action": "Mark as unavailable - deleted by uploader",
+            "recoverable": False
+        }
+    elif 'not available in your country' in error_lower or 'region' in error_lower:
+        return {
+            "error_type": "region_blocked",
+            "error_message": "Video is not available in your region",
+            "user_action": "Mark as region-restricted",
+            "recoverable": False
+        }
+    elif 'sign in to confirm' in error_lower and 'age' in error_lower:
+        return {
+            "error_type": "age_restricted",
+            "error_message": "Video is age-restricted",
+            "user_action": "Requires authentication - age verification",
+            "recoverable": False
+        }
+    elif 'copyright' in error_lower or 'copyright claim' in error_lower:
+        return {
+            "error_type": "copyright_claim",
+            "error_message": "Video removed due to copyright claim",
+            "user_action": "Mark as unavailable - copyright",
+            "recoverable": False
+        }
+    elif 'video not found' in error_lower or 'video id' in error_lower and 'invalid' in error_lower:
+        return {
+            "error_type": "not_found",
+            "error_message": "Video not found",
+            "user_action": "Mark as unavailable - invalid ID",
+            "recoverable": False
         }
     else:
         return {
             "error_type": "unknown",
             "error_message": error_message[:500],
-            "user_action": "Review error manually"
+            "user_action": "Review error manually",
+            "recoverable": False
         }
 
 # Вызов логирования после определения всех лимитов и функций — выводим один раз на контейнер
 _log_startup_once()
+
+# ============================================
+# TASK RECOVERY SYSTEM
+# ============================================
+def _recover_interrupted_tasks_once():
+    """
+    Восстановление прерванных задач при старте контейнера (один раз).
+
+    Сканирует все задачи и находит прерванные (status не в completed/error/failed).
+    Перезапускает их с сохранением task_id.
+    Блокирует /download_video endpoint до завершения recovery.
+    """
+    global RECOVERY_IN_PROGRESS
+
+    # Проверяем маркер - если уже запускался в этом контейнере, пропускаем
+    if os.path.exists(RECOVERY_MARKER):
+        logger.info("✅ Recovery: already completed in this container session")
+        RECOVERY_IN_PROGRESS = False
+        return
+
+    logger.info("🔄 Recovery: scanning for interrupted tasks...")
+
+    interrupted = []
+    try:
+        for task_id in os.listdir(TASKS_DIR):
+            task_dir = os.path.join(TASKS_DIR, task_id)
+            if not os.path.isdir(task_dir):
+                continue
+
+            meta_file = os.path.join(task_dir, "metadata.json")
+            if not os.path.exists(meta_file):
+                continue
+
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+
+                # Если это список (старый формат) - берем первый элемент
+                if isinstance(meta, list) and len(meta) > 0:
+                    meta = meta[0]
+
+                status = meta.get('status')
+
+                # Любой статус кроме терминальных = прерванная задача
+                if status not in ['completed', 'error', 'failed']:
+                    interrupted.append((task_id, meta))
+
+            except Exception as e:
+                logger.warning(f"[{task_id[:8]}] Failed to read metadata during recovery scan: {e}")
+                continue
+
+    except Exception as e:
+        logger.error(f"Recovery scan failed: {e}")
+
+    if not interrupted:
+        logger.info("✅ Recovery: no interrupted tasks found")
+    else:
+        logger.info(f"🔄 Recovery: found {len(interrupted)} interrupted task(s)")
+
+        for task_id, meta in interrupted:
+            old_status = meta.get('status', 'unknown')
+            video_url = meta.get('video_url') or meta.get('url')
+
+            if not video_url:
+                logger.warning(f"[{task_id[:8]}] Cannot recover: no video_url in metadata")
+                continue
+
+            logger.info(f"[{task_id[:8]}] 🔄 Restarting interrupted task (was: {old_status})")
+
+            # Обновляем metadata на "recovering"
+            try:
+                meta['status'] = 'recovering'
+                meta['recovery_started'] = datetime.now().isoformat()
+
+                # Сохраняем как список если это был список
+                meta_to_save = [meta] if isinstance(meta, dict) else meta
+                save_task_metadata(task_id, meta_to_save, verify=True)
+
+            except Exception as e:
+                logger.error(f"[{task_id[:8]}] Failed to update metadata to recovering: {e}")
+
+            # Перезапускаем задачу с ТЕМ ЖЕ task_id
+            try:
+                quality = meta.get('quality', 'best[height<=720]')
+                webhook_url = meta.get('webhook_url')
+                webhook_headers = meta.get('webhook_headers')
+
+                # Параметры для _background_download
+                client_meta = meta.get('client_meta')
+                operation = meta.get('operation', 'download_video_async')
+                base_url_external = meta.get('base_url_external', '')
+                base_url_internal = meta.get('base_url_internal', '')
+
+                thread = threading.Thread(
+                    target=_background_download,
+                    args=(task_id, video_url, quality, client_meta, operation, base_url_external, base_url_internal, webhook_url, webhook_headers),
+                    daemon=True,
+                    name=f'recovery-{task_id[:8]}'
+                )
+                thread.start()
+                logger.debug(f"[{task_id[:8]}] Recovery thread started")
+
+            except Exception as e:
+                logger.error(f"[{task_id[:8]}] Failed to restart task: {e}")
+
+    # Создаем маркер-файл
+    try:
+        with open(RECOVERY_MARKER, 'w') as f:
+            f.write(datetime.now().isoformat())
+        logger.debug(f"Recovery marker created: {RECOVERY_MARKER}")
+    except Exception as e:
+        logger.warning(f"Failed to create recovery marker: {e}")
+
+    # Разблокируем endpoint
+    RECOVERY_IN_PROGRESS = False
+    logger.info("✅ Recovery: COMPLETED. API endpoint accepting requests now.")
+
+
+def _task_recovery_loop():
+    """
+    Фоновый цикл для автоматического повтора задач с recoverable ошибками.
+
+    Проверяет каждую минуту задачи со status='error' и recoverable=true.
+    Повторяет с задержками: 30 мин, 2 часа, 6 часов (макс 3 попытки).
+    Сохраняет task_id при повторе.
+    """
+    logger.info("🔄 Task recovery loop started")
+
+    while True:
+        try:
+            time.sleep(60)  # Проверяем каждую минуту
+
+            for task_id in os.listdir(TASKS_DIR):
+                task_dir = os.path.join(TASKS_DIR, task_id)
+                if not os.path.isdir(task_dir):
+                    continue
+
+                meta_file = os.path.join(task_dir, "metadata.json")
+                if not os.path.exists(meta_file):
+                    continue
+
+                try:
+                    with open(meta_file, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+
+                    # Если список - берем первый элемент
+                    if isinstance(meta, list) and len(meta) > 0:
+                        meta = meta[0]
+
+                    # Только задачи со статусом error
+                    if meta.get('status') != 'error':
+                        continue
+
+                    # Только recoverable ошибки
+                    error_info = meta.get('error', {})
+                    if not error_info.get('recoverable', False):
+                        continue
+
+                    # Проверяем recovery metadata
+                    recovery = error_info.get('recovery', {})
+                    attempts = recovery.get('attempts', 0)
+
+                    # Максимум попыток достигнут
+                    if attempts >= MAX_RECOVERY_ATTEMPTS:
+                        logger.debug(f"[{task_id[:8]}] Max recovery attempts ({MAX_RECOVERY_ATTEMPTS}) reached")
+                        continue
+
+                    # Проверяем время следующей попытки
+                    next_retry = recovery.get('next_retry')
+                    if not next_retry:
+                        continue
+
+                    try:
+                        next_retry_dt = datetime.fromisoformat(next_retry.replace('Z', '+00:00'))
+                    except:
+                        next_retry_dt = datetime.fromisoformat(next_retry)
+
+                    now = datetime.now()
+                    # Убираем timezone для сравнения если next_retry_dt без timezone
+                    if next_retry_dt.tzinfo is None:
+                        now = now.replace(tzinfo=None)
+
+                    # Время ещё не пришло
+                    if now < next_retry_dt:
+                        continue
+
+                    # Время повтора пришло
+                    logger.info(f"[{task_id[:8]}] 🔄 Retrying task (attempt {attempts + 1}/{MAX_RECOVERY_ATTEMPTS})")
+
+                    # Обновляем metadata на "retrying"
+                    meta['status'] = 'retrying'
+                    meta['recovery_attempt'] = attempts + 1
+
+                    # Сохраняем как список если это был список
+                    meta_to_save = [meta] if isinstance(meta, dict) else meta
+                    save_task_metadata(task_id, meta_to_save, verify=True)
+
+                    # Перезапускаем с ТЕМ ЖЕ task_id
+                    video_url = meta.get('video_url') or meta.get('url')
+                    if not video_url:
+                        logger.warning(f"[{task_id[:8]}] Cannot retry: no video_url")
+                        continue
+
+                    quality = meta.get('quality', 'best[height<=720]')
+                    webhook_url = meta.get('webhook_url')
+                    webhook_headers = meta.get('webhook_headers')
+
+                    # Параметры для _background_download
+                    client_meta = meta.get('client_meta')
+                    operation = meta.get('operation', 'download_video_async')
+                    base_url_external = meta.get('base_url_external', '')
+                    base_url_internal = meta.get('base_url_internal', '')
+
+                    thread = threading.Thread(
+                        target=_background_download,
+                        args=(task_id, video_url, quality, client_meta, operation, base_url_external, base_url_internal, webhook_url, webhook_headers),
+                        daemon=True,
+                        name=f'retry-{task_id[:8]}'
+                    )
+                    thread.start()
+                    logger.debug(f"[{task_id[:8]}] Retry thread started")
+
+                except Exception as e:
+                    logger.debug(f"[{task_id[:8]}] Error checking task for recovery: {e}")
+                    continue
+
+        except Exception as e:
+            logger.error(f"Task recovery loop error: {e}")
+            time.sleep(60)  # Подождём минуту и продолжим
 
 # ============================================
 # BACKGROUND WEBHOOK RESENDER
@@ -1028,17 +1296,30 @@ def _webhook_resender_loop():
         time.sleep(max(1.0, WEBHOOK_BACKGROUND_INTERVAL_SECONDS))
 
 
-# Запускаем resender только в первом gunicorn worker
+# Запускаем recovery и resender threads только в первом gunicorn worker
 marker_file = '/tmp/ytdlp_resender_started'
 try:
     if not os.path.exists(marker_file):
         with open(marker_file, 'w') as f:
             f.write(str(os.getpid()))
+
+        # 1. Запускаем startup recovery в фоновом потоке (блокирует endpoint до завершения)
+        _recovery_thread = threading.Thread(target=_recover_interrupted_tasks_once, name='startup-recovery', daemon=True)
+        _recovery_thread.start()
+        logger.debug(f"Startup recovery thread started in process {os.getpid()}")
+
+        # 2. Запускаем runtime recovery loop для повторов с ошибками
+        _retry_thread = threading.Thread(target=_task_recovery_loop, name='task-recovery', daemon=True)
+        _retry_thread.start()
+        logger.debug(f"Task recovery loop started in process {os.getpid()}")
+
+        # 3. Запускаем webhook resender (существующий функционал)
         _resender_thread = threading.Thread(target=_webhook_resender_loop, name='webhook-resender', daemon=True)
         _resender_thread.start()
-        logger.debug(f"Resender thread started in process {os.getpid()}")
+        logger.debug(f"Webhook resender thread started in process {os.getpid()}")
+
 except Exception as e:
-    logger.warning(f"Failed to start resender thread: {e}")
+    logger.warning(f"Failed to start background threads: {e}")
 
 # ============================================
 # CLEANUP
@@ -1196,6 +1477,14 @@ def health_check():
 @app.route('/download_video', methods=['POST'])
 @require_api_key
 def download_video():
+    # Блокируем endpoint пока идёт startup recovery
+    global RECOVERY_IN_PROGRESS
+    if RECOVERY_IN_PROGRESS:
+        logger.debug("Holding request: startup recovery in progress...")
+        while RECOVERY_IN_PROGRESS:
+            time.sleep(0.1)  # Ждём завершения recovery
+        logger.debug("Request proceeding: startup recovery completed")
+
     try:
         data = request.json or {}
         video_url = data.get('url')
@@ -1802,20 +2091,31 @@ def _background_download(
         else:
             logger.error(f"[{task_id[:8]}] DOWNLOAD FAILED: File not downloaded")
             error_info = classify_youtube_error("File not downloaded")
+
+            # Создаем error structure (file not downloaded обычно не recoverable)
+            error_structure = {
+                "type": error_info["error_type"],
+                "message": error_info["error_message"],
+                "user_action": error_info["user_action"],
+                "recoverable": error_info.get("recoverable", False),
+                "timestamp": datetime.now().isoformat()
+            }
+
             update_task(task_id, {
                 "status": "error",
                 "error_type": error_info["error_type"],
                 "error_message": error_info["error_message"],
                 "user_action": error_info["user_action"]
             })
+
             metadata = {
                 "task_id": task_id,
                 "status": "error",
                 "operation": operation,
-                "error_type": error_info["error_type"],
-                "error_message": error_info["error_message"],
-                "user_action": error_info["user_action"],
-                "failed_at": datetime.now().isoformat()
+                "error": error_structure,
+                "failed_at": datetime.now().isoformat(),
+                "video_url": video_url,
+                "quality": quality
             }
             if client_meta is not None:
                 metadata['client_meta'] = client_meta
@@ -1850,6 +2150,41 @@ def _background_download(
     except Exception as e:
         error_info = classify_youtube_error(str(e))
         logger.error(f"[{task_id[:8]}] DOWNLOAD EXCEPTION: type={error_info['error_type']}, msg={error_info['error_message'][:100]}")
+
+        # Вычисляем recovery metadata если ошибка recoverable
+        recovery_info = None
+        if error_info.get('recoverable', False):
+            # Читаем текущую попытку из метаданных (если это повтор)
+            try:
+                meta_path = os.path.join(get_task_dir(task_id), "metadata.json")
+                if os.path.exists(meta_path):
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        current_meta = json.load(f)
+                        if isinstance(current_meta, dict):
+                            prev_error = current_meta.get('error', {})
+                            prev_recovery = prev_error.get('recovery', {})
+                            attempts = prev_recovery.get('attempts', 0)
+                        else:
+                            attempts = 0
+                else:
+                    attempts = 0
+            except:
+                attempts = 0
+
+            # Если ещё не достигли лимита - планируем следующую попытку
+            if attempts < MAX_RECOVERY_ATTEMPTS:
+                delay_seconds = RECOVERY_RETRY_DELAYS[attempts]
+                next_retry_dt = datetime.now() + timedelta(seconds=delay_seconds)
+
+                recovery_info = {
+                    'attempts': attempts,
+                    'next_retry': next_retry_dt.isoformat(),
+                    'delay_seconds': delay_seconds
+                }
+                logger.info(f"[{task_id[:8]}] Recoverable error - will retry in {delay_seconds//60} minutes (attempt {attempts + 1}/{MAX_RECOVERY_ATTEMPTS})")
+            else:
+                logger.warning(f"[{task_id[:8]}] Recoverable error - max attempts ({MAX_RECOVERY_ATTEMPTS}) reached, giving up")
+
         update_task(task_id, {
             "status": "error",
             "error_type": error_info["error_type"],
@@ -1857,20 +2192,38 @@ def _background_download(
             "user_action": error_info["user_action"],
             "raw_error": str(e)[:1000]
         })
+
+        # Создаем error structure с recovery metadata
+        error_structure = {
+            "type": error_info["error_type"],
+            "message": error_info["error_message"],
+            "user_action": error_info["user_action"],
+            "recoverable": error_info.get("recoverable", False),
+            "raw_error": str(e)[:1000],
+            "timestamp": datetime.now().isoformat()
+        }
+
+        if recovery_info:
+            error_structure["recovery"] = recovery_info
+
         metadata = {
             "task_id": task_id,
             "status": "error",
             "operation": operation,
-            "error_type": error_info["error_type"],
-            "error_message": error_info["error_message"],
-            "user_action": error_info["user_action"],
-            "raw_error": str(e)[:1000],
-            "failed_at": datetime.now().isoformat()
+            "error": error_structure,
+            "failed_at": datetime.now().isoformat(),
+            "video_url": video_url,
+            "quality": quality
         }
         if client_meta is not None:
             metadata['client_meta'] = client_meta
-        if webhook_url:
-            metadata['webhook_url'] = webhook_url
+        if webhook_url or webhook_headers:
+            webhook_obj = {}
+            if webhook_url:
+                webhook_obj["url"] = webhook_url
+            if webhook_headers:
+                webhook_obj["headers"] = webhook_headers
+            metadata["webhook"] = webhook_obj
         
         logger.error(f"[{task_id[:8]}] Saving error metadata (exception: {error_info['error_type']})")
         try:
