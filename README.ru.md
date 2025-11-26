@@ -5,8 +5,8 @@
 [![Docker Hub](https://img.shields.io/docker/v/alexbic/youtube-downloader-api?label=Docker%20Hub&logo=docker)](https://hub.docker.com/r/alexbic/youtube-downloader-api)
 [![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-image-blue?logo=github)](https://github.com/alexbic/youtube-downloader-api/pkgs/container/youtube-downloader-api)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](docs/RELEASE_NOTES_v1.0.0.md)
-[![Changelog](https://img.shields.io/badge/changelog-1.0.0-blue)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](docs/RELEASE_NOTES_v1.1.0.md)
+[![Changelog](https://img.shields.io/badge/changelog-1.1.0-blue)](docs/CHANGELOG.md)
 
 > ⚠️ **ПУБЛИЧНАЯ ВЕРСИЯ**: Это бесплатная, ограниченная версия с фиксированными лимитами (2 воркера, TTL 24ч, 256MB Redis).
 > 🚀 **Нужно больше?** Посмотрите [YouTube Downloader API Pro](https://github.com/alexbic/youtube-downloader-api-pro) - хранилище PostgreSQL, настраиваемый TTL, кеш результатов и многое другое!
@@ -23,6 +23,7 @@
 - 🔄 **Синхронный и асинхронный режимы** - выбор между немедленной или фоновой обработкой
 - 🔗 **Поддержка webhook** - POST уведомления при завершении задачи с автоматическими повторами
 - 🔁 **Webhook resender** - фоновый сервис повторяет неудавшиеся webhook каждые 15 минут
+- 🔧 **Автоматическое восстановление задач** - возобновление прерванных задач при перезапуске, повтор неудачных задач с backoff
 - 🔑 **Опциональная аутентификация** - поддержка Bearer токенов для публичных развертываний
 - 🌐 **Абсолютные URL** - поддержка внутренних и внешних URL
 - 📦 **Поддержка Redis** - хранилище задач для нескольких воркеров (встроенный Redis)
