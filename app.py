@@ -1,4 +1,3 @@
-
 import os
 import threading
 import json
@@ -12,6 +11,9 @@ import threading
 from functools import wraps
 from typing import Dict, Any
 import time
+import base64
+import tempfile
+import atexit
 from api_commons import (
     # Error codes - Authentication
     ERROR_MISSING_AUTH_TOKEN,
@@ -137,6 +139,28 @@ INTERNAL_BASE_URL = os.getenv('INTERNAL_BASE_URL')
 # Авторизация требуется только если указан внешний URL и задан ключ
 AUTH_REQUIRED = bool(PUBLIC_BASE_URL) and bool(API_KEY)
 
+# ============================================
+# COOKIES FROM ENVIRONMENT VARIABLE
+# ============================================
+COOKIES_BASE64 = os.environ.get('COOKIES_BASE64')
+COOKIES_TEMP_FILE = None
+if COOKIES_BASE64:
+    try:
+        cookies_data = base64.b64decode(COOKIES_BASE64).decode('utf-8')
+        fd, COOKIES_TEMP_FILE = tempfile.mkstemp(suffix='.txt', prefix='cookies_')
+        with os.fdopen(fd, 'w') as f:
+            f.write(cookies_data)
+        logger.info(f"✅ Cookies loaded from COOKIES_BASE64 to temp file: {COOKIES_TEMP_FILE}")
+
+        def cleanup_cookie_file():
+            if COOKIES_TEMP_FILE and os.path.exists(COOKIES_TEMP_FILE):
+                os.unlink(COOKIES_TEMP_FILE)
+                logger.debug("Cookies temp file cleaned up")
+        atexit.register(cleanup_cookie_file)
+    except Exception as e:
+        logger.error(f"❌ Failed to load cookies from COOKIES_BASE64: {e}")
+        COOKIES_TEMP_FILE = None
+
 # Error constants imported from api_commons module
 
 def log_startup_info():
@@ -178,6 +202,8 @@ def log_startup_info():
             logger.info(f"   Tasks dir: {TASKS_DIR}")
         if 'COOKIES_PATH' in globals() and os.path.exists(COOKIES_PATH):
             logger.info(f"   Cookies: available")
+        if COOKIES_TEMP_FILE:
+            logger.info(f"   Cookies: from environment variable")
         logger.info("=" * 60)
     finally:
         # Возвращаем старый форматтер
@@ -398,9 +424,16 @@ def _prepare_ydl_opts(task_id: str | None, video_url: str, quality: str, outtmpl
                 _make_progress_hook(task_id, max(1, PROGRESS_STEP))
             ]
 
-    if os.path.exists(COOKIES_PATH):
-        touch_cookies()  # Обновляем временные метки перед использованием
-        ydl_opts['cookiefile'] = COOKIES_PATH
+    # Use cookies from temp file if available, otherwise fallback to static path
+    cookie_file = None
+    if COOKIES_TEMP_FILE and os.path.exists(COOKIES_TEMP_FILE):
+        cookie_file = COOKIES_TEMP_FILE
+    elif os.path.exists(COOKIES_PATH):
+        cookie_file = COOKIES_PATH
+        touch_cookies()   # only needed for static file
+
+    if cookie_file:
+        ydl_opts['cookiefile'] = cookie_file
 
     if LOG_YTDLP_OPTS:
         logger.info(f"yt-dlp opts for {video_url}: {ydl_opts}")
